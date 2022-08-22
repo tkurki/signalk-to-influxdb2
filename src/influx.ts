@@ -30,7 +30,7 @@ export class SKInflux {
   constructor(config: SKInfluxConfig) {
     const { org, bucket } = config
     const influx = new InfluxDB(config)
-    this.writeApi = influx.getWriteApi(org, bucket)
+    this.writeApi = influx.getWriteApi(org, bucket, 'ms')
     this.queryApi = influx.getQueryApi(org)
   }
 
