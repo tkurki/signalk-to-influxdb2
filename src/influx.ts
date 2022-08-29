@@ -13,9 +13,12 @@
  * limitations under the License.
  */
 
-import { SKContext, SKValue } from '@chacal/signalk-ts'
-import { FluxTableMetaData, InfluxDB, Point, QueryApi, WriteApi } from '@influxdata/influxdb-client'
-import { QueryParams } from '.'
+import { SKContext } from '@chacal/signalk-ts'
+import { HttpError, InfluxDB, Point, QueryApi, WriteApi } from '@influxdata/influxdb-client'
+import { BucketsAPI, OrgsAPI } from '@influxdata/influxdb-client-apis'
+
+import { QueryParams } from './plugin'
+import { S2 } from 's2-geometry'
 
 export interface SKInfluxConfig {
   url: string
@@ -24,25 +27,47 @@ export interface SKInfluxConfig {
   bucket: string
 }
 
+interface PathValue {
+  path: string
+  value: any
+}
+
 export class SKInflux {
+  private influx: InfluxDB
+  private org: string
+  private bucket: string
   private writeApi: WriteApi
   private queryApi: QueryApi
   constructor(config: SKInfluxConfig) {
     const { org, bucket } = config
-    const influx = new InfluxDB(config)
-    this.writeApi = influx.getWriteApi(org, bucket, 'ms')
-    this.queryApi = influx.getQueryApi(org)
+    this.influx = new InfluxDB(config)
+    this.org = org
+    this.bucket = bucket
+    this.writeApi = this.influx.getWriteApi(org, bucket, 'ms')
+    this.queryApi = this.influx.getQueryApi(org)
   }
 
-  handleValue(context: SKContext, source: string, pathValue: SKValue) {
+  init() {
+    return ensureBucketExists(this.influx, this.org, this.bucket)
+  }
+
+  handleValue(context: SKContext, source: string, pathValue: PathValue) {
     const point = new Point(pathValue.path).tag('context', context).tag('source', source)
-    switch (typeof pathValue.value) {
-      case 'number':
-        point.floatField('value', pathValue.value)
-        break
-      case 'string':
-        point.stringField('value', pathValue.value)
-        break
+    if (pathValue.path === 'navigation.position') {
+      point.floatField('lat', pathValue.value.latitude)
+      point.floatField('lon', pathValue.value.longitude)
+      point.tag('s2_cell_id', posToS2CellId(pathValue.value))
+    } else {
+      switch (typeof pathValue.value) {
+        case 'number':
+          point.floatField('value', pathValue.value)
+          break
+        case 'string':
+          point.stringField('value', pathValue.value)
+          break
+        case 'boolean':
+          point.booleanField('value', pathValue.value)
+      }
     }
     this.writeApi.writePoint(point)
   }
@@ -51,14 +76,38 @@ export class SKInflux {
     return this.writeApi.flush()
   }
 
-  getValues(bucket: string, params: QueryParams): Promise<Array<any>> {
-    return this.queryApi.collectRows(paramsToQuery(bucket, params))
+  getValues(params: QueryParams): Promise<Array<any>> {
+    return this.queryApi.collectRows(paramsToQuery(this.bucket, params))
   }
 }
 
 const paramsToQuery = (bucket: string, params: QueryParams) => `
 from(bucket: "${bucket}")
-  |> range(start: -1d)
-  |> mean()
-  |> yield(name: "_results")
+  |> range(start: -1y)
+  |> filter(fn: (r) => r["_measurement"] == "${params.paths[0]}")
 `
+
+const posToS2CellId = (position: { latitude: number; longitude: number }) => {
+  const cell = S2.S2Cell.FromLatLng({ lat: position.latitude, lng: position.longitude }, 10)
+  return S2.keyToId(cell.toHilbertQuadkey())
+}
+
+async function ensureBucketExists(influx: InfluxDB, org: string, name: string) {
+  const orgsAPI = new OrgsAPI(influx)
+  const organizations = await orgsAPI.getOrgs({ org })
+  if (!organizations || !organizations.orgs || !organizations.orgs.length) {
+    throw new Error(`No organization named "${org}" found!`)
+  }
+  const orgID = organizations.orgs[0].id || 'no orgid'
+  const bucketsAPI = new BucketsAPI(influx)
+  try {
+    const buckets = await bucketsAPI.getBuckets({ orgID, name })
+  } catch (e) {
+    if (e instanceof HttpError && e.statusCode == 404) {
+      const bucket = await bucketsAPI.postBuckets({ body: { orgID, name, retentionRules: [] } })
+      console.log(`Influxdb2: created bucket ${name}`)
+        } else {
+      throw e
+    }
+  }
+}

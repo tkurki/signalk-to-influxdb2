@@ -1,0 +1,12 @@
+node_modules
+.vscode
+src/*
+*.tgz
+tsconfig.json
+marker
+Dockerfile
+docker-compose.yml
+data/*
+.github
+.dockerignore
+*rc.*

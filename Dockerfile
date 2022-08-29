@@ -1,4 +1,5 @@
-FROM node:16
+ARG NODE_VERSION=16
+FROM node:$NODE_VERSION
 
 
 WORKDIR /plugin
@@ -10,6 +11,7 @@ COPY --chown=node:node package.json ./
 
 RUN npm install --quiet
 
+COPY marker ./marker
 COPY --chown=node:node tsconfig.json ./
 COPY src ./src
 

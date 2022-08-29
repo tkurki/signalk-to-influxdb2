@@ -30,7 +30,7 @@ export interface App {
 
 interface Plugin {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  start: (c: PluginConfig) => void
+  start: (c: PluginConfig) => Promise<unknown>
   stop: () => void
   // signalKApiRoutes: (r: Router) => Router
   id: string
@@ -49,7 +49,7 @@ export interface QueryParams {
 }
 
 interface InfluxPlugin {
-  getValues: (bucket: string, params: QueryParams) => Promise<Array<any>>
+  getValues: (params: QueryParams) => Promise<Array<any>>
   flush: () => Promise<unknown>
 }
 
@@ -62,20 +62,22 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
   return {
     start: function (config: PluginConfig) {
       skInfluxes = config.influxes.map((config: SKInfluxConfig) => new SKInflux(config))
-      app.signalk.on('delta', (delta: SKDelta) => {
-        delta.updates.forEach((update) => {
-          update.values.forEach((pathValue) => {
-            skInfluxes.forEach((skInflux) => skInflux.handleValue(delta.context, update.$source, pathValue))
+      return Promise.all(skInfluxes.map((skInflux) => skInflux.init())).then(() =>
+        app.signalk.on('delta', (delta: SKDelta) => {
+          delta.updates.forEach((update) => {
+            update.values.forEach((pathValue) => {
+              skInfluxes.forEach((skInflux) => skInflux.handleValue(delta.context, update.$source, pathValue))
+            })
           })
-        })
-      })
+        }),
+      )
     },
 
     stop: function () {},
 
     flush: () => Promise.all(skInfluxes.map((ski) => ski.flush())),
 
-    getValues: (bucket: string, params: QueryParams) => skInfluxes[0].getValues(bucket, params),
+    getValues: (params: QueryParams) => skInfluxes[0].getValues(params),
 
     id: packageInfo.name,
     name: packageInfo.description,

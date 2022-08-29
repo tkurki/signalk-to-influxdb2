@@ -10,7 +10,7 @@
   "repository": "https://github.com/tkurki/signalk-to-influxdb2",
   "scripts": {
     "test": "docker-compose run plugintest",
-    "mocha": "mocha dist/*.test.js --exit",
+    "mocha": "mocha --require ts-node/register --extensions ts src/*.test.ts --exit",
     "build": "tsc"
   },
   "license": "Apache-2.0",
@@ -28,12 +28,15 @@
     "eslint-plugin-prettier": "^4.2.1",
     "mocha": "^10.0.0",
     "prettier": "^2.7.1",
+    "ts-node": "^10.9.1",
     "typescript": "^4.7.4",
     "wait-on": "^6.0.1"
   },
   "dependencies": {
     "@influxdata/influxdb-client": "^1.28.0",
+    "@influxdata/influxdb-client-apis": "^1.29.0",
     "@js-joda/core": "^5.3.0",
-    "@js-joda/timezone": "^2.12.1"
+    "@js-joda/timezone": "^2.12.1",
+    "s2-geometry": "^1.2.10"
   }
 }
