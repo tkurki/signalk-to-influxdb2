@@ -21,9 +21,24 @@ import { QueryParams } from './plugin'
 import { S2 } from 's2-geometry'
 
 export interface SKInfluxConfig {
+  /**
+   * Url of the InfluxDb 2 server
+   * 
+   * @title Foo
+   */
   url: string
+  /**
+   * Token
+   * 
+   */
   token: string
+  /**
+   * Organisation
+   */
   org: string
+  /**
+   * Bucket
+   */
   bucket: string
 }
 

@@ -1,1 +1,1 @@
-module.exports = require('./module/built').default
+module.exports = require('./dist/plugin').default

@@ -1,6 +1,5 @@
 node_modules
 .vscode
-src/*
 *.tgz
 tsconfig.json
 marker
@@ -10,3 +9,4 @@ data/*
 .github
 .dockerignore
 *rc.*
+generate-schema

@@ -53,7 +53,7 @@ interface InfluxPlugin {
   flush: () => Promise<unknown>
 }
 
-interface PluginConfig {
+export interface PluginConfig {
   influxes: SKInfluxConfig[]
 }
 
@@ -82,9 +82,6 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
     id: packageInfo.name,
     name: packageInfo.description,
     description: 'Signal K integration with InfluxDb 2',
-    schema: {
-      type: 'object',
-      properties: {},
-    },
+    schema: require('../dist/PluginConfig.json')
   }
 }
