@@ -14,7 +14,8 @@ RUN npm install --quiet
 COPY marker ./marker
 COPY --chown=node:node tsconfig.json ./
 COPY src ./src
+COPY generate-schema ./
 
-RUN npx tsc
+RUN npm run build
 
 ENTRYPOINT npm run mocha
