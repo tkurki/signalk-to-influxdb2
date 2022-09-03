@@ -96,15 +96,26 @@ export class SKInflux {
   }
 }
 
-const paramsToQuery = (bucket: string, params: QueryParams) => `
-from(bucket: "${bucket}")
-  |> range(start: -1y)
-  |> filter(fn: (r) => r["_measurement"] == "${params.paths[0]}")
-`
+const paramsToQuery = (bucket: string, params: QueryParams) => {
+  let query = `
+  from(bucket: "${bucket}")
+    |> range(start: -1y)
+    |> filter(fn: (r) => r["_measurement"] == "${params.paths[0]}")
+  `
+  if (params.bbox && params.paths[0] === 'navigation.position') {
+    query = `import "experimental/geo"
+    ` + query  + `
+     |> geo.filterRows(region: {minLat: ${params.bbox.sw.latitude},maxLat: ${params.bbox.ne.latitude},minLon: ${params.bbox.sw.longitude},maxLon: ${params.bbox.ne.longitude}})
+    `
+  }
+  return query
+}
+
 
 const posToS2CellId = (position: { latitude: number; longitude: number }) => {
   const cell = S2.S2Cell.FromLatLng({ lat: position.latitude, lng: position.longitude }, 10)
-  return S2.keyToId(cell.toHilbertQuadkey())
+  const rawId = S2.keyToId(cell.toHilbertQuadkey())
+  return Number(rawId).toString(16).replace(/0*$/,'')
 }
 
 async function ensureBucketExists(influx: InfluxDB, org: string, name: string) {

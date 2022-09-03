@@ -1,8 +1,9 @@
 import { expect } from 'chai'
 import { ZonedDateTime } from '@js-joda/core'
 import { EventEmitter } from 'stream'
-import InfluxPluginFactory, { App } from './plugin'
+import InfluxPluginFactory, { App, BBox } from './plugin'
 import waitOn from 'wait-on'
+import { SKPosition } from '@chacal/signalk-ts'
 
 const INFLUX_HOST = process.env['INFLUX_HOST'] || '127.0.0.1'
 
@@ -38,6 +39,9 @@ describe('Plugin', () => {
     const TESTPATHNUMERIC = 'test.path.numeric'
     const TESTNUMERICVALUE = 3.14
     const TESTPATHBOOLEAN = 'test.path.boolean'
+    const TESTLATITUDE = 60.1513403
+    const TESTLONGITUDE = 24.8916156
+    const BBOXDIFF = 0.1
     const TESTVALUES = [
       [
         {
@@ -55,10 +59,18 @@ describe('Plugin', () => {
         {
           path: 'navigation.position',
           value: {
-            latitude: 60.1513403,
-            longitude: 24.8916156,
+            latitude: TESTLATITUDE,
+            longitude: TESTLONGITUDE,
           },
-          rowCount: 2,
+          rowCount: 1
+        },
+        {
+          path: 'navigation.position',
+          value: {
+            latitude: TESTLATITUDE + 1,
+            longitude: TESTLONGITUDE + 1,
+          },
+          rowCount: 1
         },
       ],
     ]
@@ -88,6 +100,10 @@ describe('Plugin', () => {
                     to: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
                     paths: [pathValue.path],
                     resolution: 60,
+                    bbox: new BBox({
+                      sw: new SKPosition(TESTLATITUDE - BBOXDIFF, TESTLONGITUDE - BBOXDIFF),
+                      ne: new SKPosition(TESTLATITUDE + BBOXDIFF, TESTLONGITUDE + BBOXDIFF),
+                    }),
                   })
                   .then((rows) => {
                     expect(rows.length).to.equal(pathValue.rowCount)

@@ -14,7 +14,7 @@
  */
 
 import { SKInflux, SKInfluxConfig } from './influx'
-import { SKDelta } from '@chacal/signalk-ts'
+import { SKDelta, SKPosition } from '@chacal/signalk-ts'
 import { EventEmitter } from 'stream'
 import { ZonedDateTime } from '@js-joda/core'
 
@@ -40,12 +40,24 @@ interface Plugin {
   schema: any
 }
 
+
+export class BBox {
+  readonly ne: SKPosition
+  readonly sw: SKPosition
+
+  constructor(corners: { ne: SKPosition; sw: SKPosition }) {
+    this.ne = corners.ne
+    this.sw = corners.sw
+  }
+}
+
 export interface QueryParams {
   context: string
   from: ZonedDateTime
   to: ZonedDateTime
   paths: string[]
   resolution: number
+  bbox?: BBox
 }
 
 interface InfluxPlugin {
