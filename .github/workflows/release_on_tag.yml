@@ -25,10 +25,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
 
       - name: Create Release
-        uses: actions/create-release@v1
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
           body: ${{steps.github_release.outputs.changelog}}
           artifacts: "signalk-to-influxdb2*.tgz"
         env:
