@@ -4,7 +4,7 @@
   "description": "SIgnal K to InfluxDb 2",
   "main": "index.js",
   "keywords": [
-    "signalk-node-server-pluginn"
+    "signalk-node-server-plugin"
   ],
   "author": "Teppo Kurki <teppo.kurki@iki.fi>",
   "repository": "https://github.com/tkurki/signalk-to-influxdb2",
