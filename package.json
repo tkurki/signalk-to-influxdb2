@@ -1,6 +1,6 @@
 {
   "name": "signalk-to-influxdb2",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "SIgnal K to InfluxDb 2",
   "main": "index.js",
   "keywords": [
