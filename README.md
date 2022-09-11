@@ -1,5 +1,5 @@
 <img width="600" alt="sk" src="https://user-images.githubusercontent.com/1049678/189514933-9182db0a-f746-4b7b-9840-10715e5f9199.png">
-![influx](https://user-images.githubusercontent.com/1049678/189514907-f953af27-6136-496b-b9f4-4dd5110deff7.png)
+<img src="https://user-images.githubusercontent.com/1049678/189514907-f953af27-6136-496b-b9f4-4dd5110deff7.png">
 
 # signalk-to-influxdb2
 
