@@ -23,13 +23,13 @@ import { S2 } from 's2-geometry'
 export interface SKInfluxConfig {
   /**
    * Url of the InfluxDb 2 server
-   * 
+   *
    * @title Foo
    */
   url: string
   /**
    * Token
-   * 
+   *
    */
   token: string
   /**
@@ -44,6 +44,7 @@ export interface SKInfluxConfig {
 
 interface PathValue {
   path: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any
 }
 
@@ -91,6 +92,7 @@ export class SKInflux {
     return this.writeApi.flush()
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getValues(params: QueryParams): Promise<Array<any>> {
     return this.queryApi.collectRows(paramsToQuery(this.bucket, params))
   }
@@ -116,12 +118,15 @@ async function ensureBucketExists(influx: InfluxDB, org: string, name: string) {
   const orgID = organizations.orgs[0].id || 'no orgid'
   const bucketsAPI = new BucketsAPI(influx)
   try {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const buckets = await bucketsAPI.getBuckets({ orgID, name })
   } catch (e) {
     if (e instanceof HttpError && e.statusCode == 404) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const bucket = await bucketsAPI.postBuckets({ body: { orgID, name, retentionRules: [] } })
+      // eslint-disable-next-line no-console
       console.log(`Influxdb2: created bucket ${name}`)
-        } else {
+    } else {
       throw e
     }
   }

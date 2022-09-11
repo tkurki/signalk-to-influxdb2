@@ -14,9 +14,11 @@ describe('Plugin', () => {
     })
 
     const app: App = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
       debug: function (...args: any): void {
         throw new Error('Function not implemented.')
       },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
       error: function (...args: any): void {
         throw new Error('Function not implemented.')
       },
@@ -74,33 +76,37 @@ describe('Plugin', () => {
         ],
       }),
     )
-    return plugin
-      .flush()
-      .then(() => {
-        return Promise.all(
-          TESTVALUES.reduce((acc, values) => {
-            acc = acc.concat(
-              values.map((pathValue) =>
-                plugin
-                  .getValues({
-                    context: TESTCONTEXT,
-                    from: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
-                    to: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
-                    paths: [pathValue.path],
-                    resolution: 60,
-                  })
-                  .then((rows) => {
-                    expect(rows.length).to.equal(pathValue.rowCount)
-                  }),
-              ),
-            )
-            return acc
-          }, new Array<any[]>()),
-        )
-      })
-      .then((results: any[][]) => {
-        expect(results.length).be.greaterThan(0)
-        return true
-      })
+    return (
+      plugin
+        .flush()
+        .then(() => {
+          return Promise.all(
+            TESTVALUES.reduce((acc, values) => {
+              acc = acc.concat(
+                values.map((pathValue) =>
+                  plugin
+                    .getValues({
+                      context: TESTCONTEXT,
+                      from: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
+                      to: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
+                      paths: [pathValue.path],
+                      resolution: 60,
+                    })
+                    .then((rows) => {
+                      expect(rows.length).to.equal(pathValue.rowCount)
+                    }),
+                ),
+              )
+              return acc
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            }, new Array<any[]>()),
+          )
+        })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .then((results: any[][]) => {
+          expect(results.length).be.greaterThan(0)
+          return true
+        })
+    )
   })
 })

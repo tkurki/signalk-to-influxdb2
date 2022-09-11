@@ -18,6 +18,7 @@ import { SKDelta } from '@chacal/signalk-ts'
 import { EventEmitter } from 'stream'
 import { ZonedDateTime } from '@js-joda/core'
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageInfo = require('../package.json')
 
 export interface App {
@@ -49,7 +50,7 @@ export interface QueryParams {
 }
 
 interface InfluxPlugin {
-  getValues: (params: QueryParams) => Promise<Array<any>>
+  getValues: (params: QueryParams) => Promise<Array<unknown>>
   flush: () => Promise<unknown>
 }
 
@@ -73,6 +74,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
       )
     },
 
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
     stop: function () {},
 
     flush: () => Promise.all(skInfluxes.map((ski) => ski.flush())),
@@ -82,6 +84,6 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
     id: packageInfo.name,
     name: packageInfo.description,
     description: 'Signal K integration with InfluxDb 2',
-    schema: require('../dist/PluginConfig.json')
+    schema: require('../dist/PluginConfig.json'),
   }
 }
