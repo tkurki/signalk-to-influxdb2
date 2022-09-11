@@ -59,6 +59,12 @@ export interface PluginConfig {
 }
 
 export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const schema = require('../dist/PluginConfig.json')
+  const writeOptionsProps = schema.properties.influxes.items.properties.writeOptions.properties
+  delete writeOptionsProps.writeFailed
+  delete writeOptionsProps.writeSuccess
+
   let skInfluxes: SKInflux[]
   return {
     start: function (config: PluginConfig) {
@@ -84,6 +90,6 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
     id: packageInfo.name,
     name: packageInfo.description,
     description: 'Signal K integration with InfluxDb 2',
-    schema: require('../dist/PluginConfig.json'),
+    schema,
   }
 }

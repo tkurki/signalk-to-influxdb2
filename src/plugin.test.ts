@@ -32,6 +32,11 @@ describe('Plugin', () => {
           token: 'signalk_token',
           org: 'signalk_org',
           bucket,
+          writeOptions: {
+            batchSize: 1,
+            flushInterval: 10,
+            maxRetries: 1,
+          },
         },
       ],
     })

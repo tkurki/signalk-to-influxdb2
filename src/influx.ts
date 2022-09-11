@@ -14,7 +14,7 @@
  */
 
 import { SKContext } from '@chacal/signalk-ts'
-import { HttpError, InfluxDB, Point, QueryApi, WriteApi } from '@influxdata/influxdb-client'
+import { HttpError, InfluxDB, Point, QueryApi, WriteApi, WriteOptions } from '@influxdata/influxdb-client'
 import { BucketsAPI, OrgsAPI } from '@influxdata/influxdb-client-apis'
 
 import { QueryParams } from './plugin'
@@ -24,22 +24,25 @@ export interface SKInfluxConfig {
   /**
    * Url of the InfluxDb 2 server
    *
-   * @title Foo
+   * @title Url
    */
   url: string
   /**
-   * Token
+   * Authentication token
    *
+   * @title Token
    */
   token: string
   /**
-   * Organisation
+   * @title Organisation
    */
   org: string
   /**
-   * Bucket
+   * @title Bucket
    */
   bucket: string
+
+  writeOptions: Partial<WriteOptions>
 }
 
 interface PathValue {
