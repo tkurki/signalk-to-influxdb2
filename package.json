@@ -11,6 +11,8 @@
   "scripts": {
     "test": "docker-compose run plugintest",
     "mocha": "mocha --require ts-node/register --extensions ts src/*.test.ts",
+    "lint": "eslint src --ext .ts --fix",
+    "lint:only": "eslint src --ext .ts",
     "generate-schema": "./generate-schema >dist/PluginConfig.json",
     "build": "tsc && npm run generate-schema"
   },

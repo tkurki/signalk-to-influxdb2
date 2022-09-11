@@ -1,1 +1,1 @@
-declare module 's2-geometry';
+declare module 's2-geometry'
