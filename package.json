@@ -10,7 +10,7 @@
   "repository": "https://github.com/tkurki/signalk-to-influxdb2",
   "scripts": {
     "test": "docker-compose run plugintest",
-    "mocha": "mocha --require ts-node/register --extensions ts src/*.test.ts",
+    "mocha": "mocha --require ts-node/register --extensions ts src/*.test.ts --timeout 5000",
     "lint": "eslint src --ext .ts --fix",
     "lint:only": "eslint src --ext .ts",
     "generate-schema": "./generate-schema >dist/PluginConfig.json",
