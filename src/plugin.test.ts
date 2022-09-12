@@ -84,6 +84,7 @@ describe('Plugin', () => {
     return (
       plugin
         .flush()
+        .then(() => new Promise((resolve) => setTimeout(resolve, 500)))
         .then(() => {
           return Promise.all(
             TESTVALUES.reduce((acc, values) => {
