@@ -3,6 +3,7 @@ import { ZonedDateTime } from '@js-joda/core'
 import { EventEmitter } from 'stream'
 import InfluxPluginFactory, { App } from './plugin'
 import waitOn from 'wait-on'
+import retry from 'async-await-retry'
 
 const INFLUX_HOST = process.env['INFLUX_HOST'] || '127.0.0.1'
 
@@ -84,29 +85,33 @@ describe('Plugin', () => {
     return (
       plugin
         .flush()
-        .then(() => new Promise((resolve) => setTimeout(resolve, 500)))
-        .then(() => {
-          return Promise.all(
-            TESTVALUES.reduce((acc, values) => {
-              acc = acc.concat(
-                values.map((pathValue) =>
-                  plugin
-                    .getValues({
-                      context: TESTCONTEXT,
-                      from: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
-                      to: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
-                      paths: [pathValue.path],
-                      resolution: 60,
-                    })
-                    .then((rows) => {
-                      expect(rows.length).to.equal(pathValue.rowCount)
-                    }),
-                ),
-              )
-              return acc
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            }, new Array<any[]>()),
-          )
+        .then(async () => {
+          const testAllValuesFoundInDb = async () =>
+            Promise.all(
+              TESTVALUES.reduce((acc, values) => {
+                acc = acc.concat(
+                  values.map((pathValue) =>
+                    plugin
+                      .getValues({
+                        context: TESTCONTEXT,
+                        from: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
+                        to: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
+                        paths: [pathValue.path],
+                        resolution: 60,
+                      })
+                      .then((rows) => {
+                        expect(rows.length).to.equal(pathValue.rowCount)
+                      }),
+                  ),
+                )
+                return acc
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              }, new Array<any[]>()),
+            )
+          return await retry(testAllValuesFoundInDb, [null], {
+            retriesMax: 10,
+            interval: 50,
+          })
         })
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .then((results: any[][]) => {
