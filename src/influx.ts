@@ -17,7 +17,7 @@ import { SKContext } from '@chacal/signalk-ts'
 import { HttpError, InfluxDB, Point, QueryApi, WriteApi, WriteOptions } from '@influxdata/influxdb-client'
 import { BucketsAPI, OrgsAPI } from '@influxdata/influxdb-client-apis'
 
-import { QueryParams } from './plugin'
+import { Logging, QueryParams } from './plugin'
 import { S2 } from 's2-geometry'
 
 export interface SKInfluxConfig {
@@ -51,13 +51,15 @@ interface PathValue {
   value: any
 }
 
+export const influxPath = (path: string) => (path !== '' ? path : '<empty>')
+
 export class SKInflux {
   private influx: InfluxDB
   private org: string
   private bucket: string
   private writeApi: WriteApi
   private queryApi: QueryApi
-  constructor(config: SKInfluxConfig) {
+  constructor(config: SKInfluxConfig, private logging: Logging) {
     const { org, bucket } = config
     this.influx = new InfluxDB(config)
     this.org = org
@@ -71,7 +73,7 @@ export class SKInflux {
   }
 
   handleValue(context: SKContext, source: string, pathValue: PathValue) {
-    const point = new Point(pathValue.path).tag('context', context).tag('source', source)
+    const point = new Point(influxPath(pathValue.path)).tag('context', context).tag('source', source)
     if (pathValue.path === 'navigation.position') {
       point.floatField('lat', pathValue.value.latitude)
       point.floatField('lon', pathValue.value.longitude)
@@ -86,8 +88,12 @@ export class SKInflux {
           break
         case 'boolean':
           point.booleanField('value', pathValue.value)
+          break
+        case 'object':
+          point.stringField('value', JSON.stringify(pathValue.value))
       }
     }
+    this.logging.debug(point)
     this.writeApi.writePoint(point)
   }
 
