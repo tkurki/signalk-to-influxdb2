@@ -4,6 +4,7 @@ import { EventEmitter } from 'stream'
 import InfluxPluginFactory, { App } from './plugin'
 import waitOn from 'wait-on'
 import retry from 'async-await-retry'
+import { influxPath } from './influx'
 
 const INFLUX_HOST = process.env['INFLUX_HOST'] || '127.0.0.1'
 
@@ -17,11 +18,13 @@ describe('Plugin', () => {
     const app: App = {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
       debug: function (...args: any): void {
-        throw new Error('Function not implemented.')
+        // eslint-disable-next-line no-console
+        console.log(args)
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
       error: function (...args: any): void {
-        throw new Error('Function not implemented.')
+        // eslint-disable-next-line no-console
+        console.log(args)
       },
       signalk: new EventEmitter(),
     }
@@ -69,6 +72,15 @@ describe('Plugin', () => {
           rowCount: 2,
         },
       ],
+      [
+        {
+          path: '',
+          value: {
+            mmsi: '20123456',
+          },
+          rowCount: 1,
+        },
+      ],
     ]
     TESTVALUES.forEach((values) =>
       app.signalk.emit('delta', {
@@ -96,11 +108,11 @@ describe('Plugin', () => {
                         context: TESTCONTEXT,
                         from: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
                         to: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
-                        paths: [pathValue.path],
+                        paths: [influxPath(pathValue.path)],
                         resolution: 60,
                       })
                       .then((rows) => {
-                        expect(rows.length).to.equal(pathValue.rowCount)
+                        expect(rows.length).to.equal(pathValue.rowCount, `${JSON.stringify(pathValue)}`)
                       }),
                   ),
                 )
@@ -109,7 +121,7 @@ describe('Plugin', () => {
               }, new Array<any[]>()),
             )
           return await retry(testAllValuesFoundInDb, [null], {
-            retriesMax: 10,
+            retriesMax: 5,
             interval: 50,
           })
         })

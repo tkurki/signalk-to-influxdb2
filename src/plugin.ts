@@ -21,11 +21,13 @@ import { ZonedDateTime } from '@js-joda/core'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageInfo = require('../package.json')
 
-export interface App {
+export interface Logging {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   debug: (...args: any) => void
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   error: (...args: any) => void
+}
+export interface App extends Logging {
   signalk: EventEmitter
 }
 
@@ -68,7 +70,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
   let skInfluxes: SKInflux[]
   return {
     start: function (config: PluginConfig) {
-      skInfluxes = config.influxes.map((config: SKInfluxConfig) => new SKInflux(config))
+      skInfluxes = config.influxes.map((config: SKInfluxConfig) => new SKInflux(config, app))
       return Promise.all(skInfluxes.map((skInflux) => skInflux.init())).then(() =>
         app.signalk.on('delta', (delta: SKDelta) => {
           delta.updates.forEach((update) => {
