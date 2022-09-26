@@ -15,7 +15,7 @@
     "lint:only": "eslint src --ext .ts",
     "generate-schema": "./generate-schema >dist/PluginConfig.json",
     "build": "tsc && npm run generate-schema",
-    "prepublishOnly": "npm install && npm build"
+    "prepublishOnly": "npm install && npm run build"
   },
   "license": "Apache-2.0",
   "devDependencies": {
