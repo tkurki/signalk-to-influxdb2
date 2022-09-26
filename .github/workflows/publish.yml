@@ -1,7 +1,11 @@
 name: Publish to npm
+
+# https://stackoverflow.com/questions/69063452/github-actions-on-release-created-workflow-trigger-not-working
 on:
-  release:
-    types: [created]
+  workflow_run:
+    workflows: ["Release on tag"]
+    types: [completed]
+
 jobs:
   build:
     runs-on: ubuntu-latest
