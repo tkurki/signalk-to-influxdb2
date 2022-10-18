@@ -15,6 +15,7 @@ describe('Plugin', () => {
       resources: [`http://${INFLUX_HOST}:8086`],
     })
 
+    const TESTCONTEXT = 'testContext'
     const app: App = {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
       debug: function (...args: any): void {
@@ -27,6 +28,7 @@ describe('Plugin', () => {
         console.log(args)
       },
       signalk: new EventEmitter(),
+      selfId: TESTCONTEXT,
     }
     const plugin = InfluxPluginFactory(app)
     await plugin.start({
@@ -36,6 +38,7 @@ describe('Plugin', () => {
           token: 'signalk_token',
           org: 'signalk_org',
           bucket,
+          storeAllContexts: false,
           writeOptions: {
             batchSize: 1,
             flushInterval: 10,
@@ -44,7 +47,6 @@ describe('Plugin', () => {
         },
       ],
     })
-    const TESTCONTEXT = 'testContext'
     const TESTSOURCE = 'test$source'
     const TESTPATHNUMERIC = 'test.path.numeric'
     const TESTNUMERICVALUE = 3.14
