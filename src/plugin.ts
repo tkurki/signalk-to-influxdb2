@@ -29,6 +29,7 @@ export interface Logging {
 }
 export interface App extends Logging {
   signalk: EventEmitter
+  selfId: string
 }
 
 interface Plugin {
@@ -70,12 +71,14 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
   let skInfluxes: SKInflux[]
   return {
     start: function (config: PluginConfig) {
+      const selfContext = 'vessels.' + app.selfId
       skInfluxes = config.influxes.map((config: SKInfluxConfig) => new SKInflux(config, app))
       return Promise.all(skInfluxes.map((skInflux) => skInflux.init())).then(() =>
         app.signalk.on('delta', (delta: SKDelta) => {
+          const isSelf = delta.context === selfContext
           delta.updates.forEach((update) => {
             update.values.forEach((pathValue) => {
-              skInfluxes.forEach((skInflux) => skInflux.handleValue(delta.context, update.$source, pathValue))
+              skInfluxes.forEach((skInflux) => skInflux.handleValue(delta.context, isSelf, update.$source, pathValue))
             })
           })
         }),

@@ -42,6 +42,12 @@ export interface SKInfluxConfig {
    */
   bucket: string
 
+  /**
+   * @title Store all contexts (default: store just self data)
+   * @default false
+   */
+  storeAllContexts: boolean
+
   writeOptions: Partial<WriteOptions>
 }
 
@@ -59,11 +65,13 @@ export class SKInflux {
   private bucket: string
   private writeApi: WriteApi
   private queryApi: QueryApi
+  private storeAllContexts: boolean
   constructor(config: SKInfluxConfig, private logging: Logging) {
-    const { org, bucket } = config
+    const { org, bucket, storeAllContexts } = config
     this.influx = new InfluxDB(config)
     this.org = org
     this.bucket = bucket
+    this.storeAllContexts = storeAllContexts
     this.writeApi = this.influx.getWriteApi(org, bucket, 'ms')
     this.queryApi = this.influx.getQueryApi(org)
   }
@@ -72,7 +80,13 @@ export class SKInflux {
     return ensureBucketExists(this.influx, this.org, this.bucket)
   }
 
-  handleValue(context: SKContext, source: string, pathValue: PathValue) {
+  handleValue(context: SKContext, isSelf: boolean, source: string, pathValue: PathValue) {
+    console.log('sac:' + this.storeAllContexts)
+    console.log(isSelf)
+    console.log(context)
+    if (!this.storeAllContexts && !isSelf) {
+      return
+    }
     const point = new Point(influxPath(pathValue.path)).tag('context', context).tag('source', source)
     if (pathValue.path === 'navigation.position') {
       point.floatField('lat', pathValue.value.latitude)
