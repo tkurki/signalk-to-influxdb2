@@ -20,6 +20,9 @@ import { BucketsAPI, OrgsAPI } from '@influxdata/influxdb-client-apis'
 import { Logging, QueryParams } from './plugin'
 import { S2 } from 's2-geometry'
 
+export const SELF_TAG_NAME = 'self'
+export const SELF_TAG_VALUE = 'true'
+
 export interface SKInfluxConfig {
   /**
    * Url of the InfluxDb 2 server
@@ -44,6 +47,8 @@ export interface SKInfluxConfig {
 
   writeOptions: Partial<WriteOptions>
 }
+
+type PartialBy<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
 
 interface PathValue {
   path: string
@@ -72,8 +77,11 @@ export class SKInflux {
     return ensureBucketExists(this.influx, this.org, this.bucket)
   }
 
-  handleValue(context: SKContext, source: string, pathValue: PathValue) {
+  handleValue(context: SKContext, isSelf: boolean, source: string, pathValue: PathValue) {
     const point = new Point(influxPath(pathValue.path)).tag('context', context).tag('source', source)
+    if (isSelf) {
+      point.tag(SELF_TAG_NAME, SELF_TAG_VALUE)
+    }
     if (pathValue.path === 'navigation.position') {
       point.floatField('lat', pathValue.value.latitude)
       point.floatField('lon', pathValue.value.longitude)
@@ -105,13 +113,22 @@ export class SKInflux {
   getValues(params: QueryParams): Promise<Array<any>> {
     return this.queryApi.collectRows(paramsToQuery(this.bucket, params))
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getSelfValues(params: Omit<QueryParams, 'context'>): Promise<Array<any>> {
+    return this.queryApi.collectRows(paramsToQuery(this.bucket, params))
+  }
 }
 
-const paramsToQuery = (bucket: string, params: QueryParams) => `
-from(bucket: "${bucket}")
-  |> range(start: -1y)
-  |> filter(fn: (r) => r["_measurement"] == "${params.paths[0]}")
-`
+const paramsToQuery = (bucket: string, params: PartialBy<QueryParams, 'context'>) => {
+  const contextTagClause = params.context
+    ? `and r.context == "${params.context}"`
+    : `and r.${SELF_TAG_NAME} == "${SELF_TAG_VALUE}"`
+  return `
+  from(bucket: "${bucket}")
+    |> range(start: -1y)
+    |> filter(fn: (r) => r["_measurement"] == "${params.paths[0]}" ${contextTagClause})
+  `
+}
 
 const posToS2CellId = (position: { latitude: number; longitude: number }) => {
   const cell = S2.S2Cell.FromLatLng({ lat: position.latitude, lng: position.longitude }, 10)

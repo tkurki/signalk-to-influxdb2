@@ -29,6 +29,7 @@ export interface Logging {
 }
 export interface App extends Logging {
   signalk: EventEmitter
+  selfId: string
 }
 
 interface Plugin {
@@ -53,6 +54,7 @@ export interface QueryParams {
 
 interface InfluxPlugin {
   getValues: (params: QueryParams) => Promise<Array<unknown>>
+  getSelfValues: (params: Omit<QueryParams, 'context'>) => Promise<Array<unknown>>
   flush: () => Promise<unknown>
 }
 
@@ -66,6 +68,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
   const writeOptionsProps = schema.properties.influxes.items.properties.writeOptions.properties
   delete writeOptionsProps.writeFailed
   delete writeOptionsProps.writeSuccess
+  const selfContext = 'vessels.' + app.selfId
 
   let skInfluxes: SKInflux[]
   return {
@@ -73,9 +76,10 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
       skInfluxes = config.influxes.map((config: SKInfluxConfig) => new SKInflux(config, app))
       return Promise.all(skInfluxes.map((skInflux) => skInflux.init())).then(() =>
         app.signalk.on('delta', (delta: SKDelta) => {
+          const isSelf = delta.context === selfContext
           delta.updates.forEach((update) => {
             update.values.forEach((pathValue) => {
-              skInfluxes.forEach((skInflux) => skInflux.handleValue(delta.context, update.$source, pathValue))
+              skInfluxes.forEach((skInflux) => skInflux.handleValue(delta.context, isSelf, update.$source, pathValue))
             })
           })
         }),
@@ -88,6 +92,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
     flush: () => Promise.all(skInfluxes.map((ski) => ski.flush())),
 
     getValues: (params: QueryParams) => skInfluxes[0].getValues(params),
+    getSelfValues: (params: Omit<QueryParams, 'context'>) => skInfluxes[0].getSelfValues(params),
 
     id: packageInfo.name,
     name: packageInfo.description,
