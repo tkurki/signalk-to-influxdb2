@@ -15,6 +15,8 @@ describe('Plugin', () => {
       resources: [`http://${INFLUX_HOST}:8086`],
     })
 
+    const selfId = 'testContext'
+    const TESTCONTEXT = `vessels.${selfId}`
     const app: App = {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
       debug: function (...args: any): void {
@@ -27,6 +29,7 @@ describe('Plugin', () => {
         console.log(args)
       },
       signalk: new EventEmitter(),
+      selfId,
     }
     const plugin = InfluxPluginFactory(app)
     await plugin.start({
@@ -44,7 +47,6 @@ describe('Plugin', () => {
         },
       ],
     })
-    const TESTCONTEXT = 'testContext'
     const TESTSOURCE = 'test$source'
     const TESTPATHNUMERIC = 'test.path.numeric'
     const TESTNUMERICVALUE = 3.14
@@ -116,6 +118,18 @@ describe('Plugin', () => {
                       }),
                   ),
                 )
+                acc.push([
+                  plugin
+                    .getSelfValues({
+                      from: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
+                      to: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
+                      paths: [influxPath(values[0].path)],
+                      resolution: 60,
+                    })
+                    .then((rows) => {
+                      expect(rows.length).to.equal(values[0].rowCount, `${JSON.stringify(values[0])}`)
+                    }),
+                ])
                 return acc
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
               }, new Array<any[]>()),
