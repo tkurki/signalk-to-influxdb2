@@ -118,10 +118,8 @@ describe('Plugin', () => {
                     plugin
                       .getValues({
                         context: TESTCONTEXT,
-                        from: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
-                        to: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
                         paths: [influxPath(pathValue.path)],
-                        resolution: 60,
+                        influxIndex: 0,
                       })
                       .then((rows) => {
                         expect(rows.length).to.equal(pathValue.rowCount, `${JSON.stringify(pathValue)}`)
@@ -131,10 +129,8 @@ describe('Plugin', () => {
                 acc.push([
                   plugin
                     .getSelfValues({
-                      from: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
-                      to: ZonedDateTime.parse('2022-08-17T17:00:00Z'),
                       paths: [influxPath(values[0].path)],
-                      resolution: 60,
+                      influxIndex: 0,
                     })
                     .then((rows) => {
                       expect(rows.length).to.equal(values[0].rowCount, `${JSON.stringify(values[0])}`)
