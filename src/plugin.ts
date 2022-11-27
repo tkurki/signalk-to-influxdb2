@@ -32,7 +32,7 @@ export interface App extends Logging {
   selfId: string
 }
 
-interface Plugin {
+export interface Plugin {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   start: (c: PluginConfig) => Promise<unknown>
   stop: () => void
@@ -52,7 +52,7 @@ export interface QueryParams {
   resolution: number
 }
 
-interface InfluxPlugin {
+export interface InfluxPlugin {
   getValues: (params: QueryParams) => Promise<Array<unknown>>
   getSelfValues: (params: Omit<QueryParams, 'context'>) => Promise<Array<unknown>>
   flush: () => Promise<unknown>

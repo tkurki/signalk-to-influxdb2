@@ -1,37 +1,48 @@
 import { expect } from 'chai'
 import { ZonedDateTime } from '@js-joda/core'
 import { EventEmitter } from 'stream'
-import InfluxPluginFactory, { App } from './plugin'
+import InfluxPluginFactory, { App, InfluxPlugin, Plugin } from './plugin'
 import waitOn from 'wait-on'
 import retry from 'async-await-retry'
 import { influxPath } from './influx'
 
 const INFLUX_HOST = process.env['INFLUX_HOST'] || '127.0.0.1'
 
+const TESTSOURCE = 'test$source'
+const TESTPATHNUMERIC = 'test.path.numeric'
+const TESTNUMERICVALUE = 3.14
+const TESTPATHBOOLEAN = 'test.path.boolean'
+
 describe('Plugin', () => {
-  it('writes something to InfluxDb', async () => {
-    const bucket = `test_bucket_${Date.now()}`
+  const selfId = 'testContext'
+  const TESTCONTEXT = `vessels.${selfId}`
+  const app: App = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+    debug: function (...args: any): void {
+      // eslint-disable-next-line no-console
+      console.log(args)
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+    error: function (...args: any): void {
+      // eslint-disable-next-line no-console
+      console.log(args)
+    },
+    signalk: new EventEmitter(),
+    selfId,
+  }
+
+  before(async () => {
     await waitOn({
       resources: [`http://${INFLUX_HOST}:8086`],
     })
+  })
 
-    const selfId = 'testContext'
-    const TESTCONTEXT = `vessels.${selfId}`
-    const app: App = {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
-      debug: function (...args: any): void {
-        // eslint-disable-next-line no-console
-        console.log(args)
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
-      error: function (...args: any): void {
-        // eslint-disable-next-line no-console
-        console.log(args)
-      },
-      signalk: new EventEmitter(),
-      selfId,
-    }
-    const plugin = InfluxPluginFactory(app)
+  let bucket: string
+  let plugin: Plugin & InfluxPlugin
+
+  beforeEach(async () => {
+    bucket = `test_bucket_${Date.now()}`
+    plugin = InfluxPluginFactory(app)
     await plugin.start({
       influxes: [
         {
@@ -47,10 +58,9 @@ describe('Plugin', () => {
         },
       ],
     })
-    const TESTSOURCE = 'test$source'
-    const TESTPATHNUMERIC = 'test.path.numeric'
-    const TESTNUMERICVALUE = 3.14
-    const TESTPATHBOOLEAN = 'test.path.boolean'
+  })
+
+  it('writes something to InfluxDb', async () => {
     const TESTVALUES = [
       [
         {
