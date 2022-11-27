@@ -115,7 +115,9 @@ export class SKInflux {
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getSelfValues(params: Omit<QueryParams, 'context'>): Promise<Array<any>> {
-    return this.queryApi.collectRows(paramsToQuery(this.bucket, params))
+    const query = paramsToQuery(this.bucket, params)
+    console.log(query)
+    return this.queryApi.collectRows(query)
   }
 }
 

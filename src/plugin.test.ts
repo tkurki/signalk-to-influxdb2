@@ -14,8 +14,9 @@ const TESTNUMERICVALUE = 3.14
 const TESTPATHBOOLEAN = 'test.path.boolean'
 
 describe('Plugin', () => {
-  const selfId = 'testContext'
+  const selfId = 'urn:mrn:signalk:uuid:c0d79334-4e25-4245-8892-54e8ccc85elf'
   const TESTCONTEXT = `vessels.${selfId}`
+  const MMSICONTEXT = 'vessels.urn:mrn:imo:mmsi:200000000'
   const app: App = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
     debug: function (...args: any): void {
@@ -151,5 +152,52 @@ describe('Plugin', () => {
           return true
         })
     )
+  })
+
+  it('Tags self data so getSelfData works', async () => {
+    app.signalk.emit('delta', {
+      context: TESTCONTEXT,
+      updates: [
+        {
+          $source: TESTSOURCE,
+          timestamp: new Date('2022-08-17T17:01:00Z'),
+          values: [
+            {
+              path: TESTPATHNUMERIC,
+              value: 100,
+            },
+          ],
+        },
+      ],
+    })
+    app.signalk.emit('delta', {
+      context: MMSICONTEXT,
+      updates: [
+        {
+          $source: TESTSOURCE,
+          timestamp: new Date('2022-08-17T17:01:00Z'),
+          values: [
+            {
+              path: TESTPATHNUMERIC,
+              value: 200,
+            },
+          ],
+        },
+      ],
+    })
+
+    const assertData = () =>
+      plugin.flush().then(() =>
+        plugin
+          .getSelfValues({
+            paths: [TESTPATHNUMERIC],
+            influxIndex: 0,
+          })
+          .then((rows) => expect(rows.length).to.equal(1)),
+      )
+    return retry(assertData, [null], {
+      retriesMax: 5,
+      interval: 50,
+    })
   })
 })
