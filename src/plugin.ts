@@ -46,10 +46,8 @@ export interface Plugin {
 
 export interface QueryParams {
   context: string
-  from: ZonedDateTime
-  to: ZonedDateTime
   paths: string[]
-  resolution: number
+  influxIndex: number
 }
 
 export interface InfluxPlugin {
