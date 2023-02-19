@@ -60,16 +60,33 @@ export const influxPath = (path: string) => (path !== '' ? path : '<empty>')
 
 export class SKInflux {
   private influx: InfluxDB
-  private org: string
-  private bucket: string
+  public org: string
+  public bucket: string
   private writeApi: WriteApi
   private queryApi: QueryApi
-  constructor(config: SKInfluxConfig, private logging: Logging) {
+  public writtenLinesCount = 0
+  public failedLinesCount = 0
+  public lastWriteCallbackSucceeded = false
+  public url: string
+  constructor(config: SKInfluxConfig, private logging: Logging, triggerStatusUpdate: () => void) {
     const { org, bucket } = config
     this.influx = new InfluxDB(config)
     this.org = org
     this.bucket = bucket
-    this.writeApi = this.influx.getWriteApi(org, bucket, 'ms')
+    this.url = config.url
+    this.writeApi = this.influx.getWriteApi(org, bucket, 'ms', {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      writeFailed: (_error, lines, _attempt, _expires) => {
+        this.failedLinesCount += lines.length
+        this.lastWriteCallbackSucceeded = false
+        triggerStatusUpdate()
+      },
+      writeSuccess: (lines) => {
+        this.writtenLinesCount += lines.length
+        this.lastWriteCallbackSucceeded = true
+        triggerStatusUpdate()
+      },
+    })
     this.queryApi = this.influx.getQueryApi(org)
   }
 
