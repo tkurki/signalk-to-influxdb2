@@ -30,6 +30,7 @@ describe('Plugin', () => {
     },
     signalk: new EventEmitter(),
     selfId,
+    setPluginStatus: (s: string) => console.log(s),
   }
 
   before(async () => {
