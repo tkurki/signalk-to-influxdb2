@@ -5,5 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - name: Install & lint
+        run: npm install && npm run ci-lint
       - name: Run tests against InfluxDb2
         run: docker-compose run plugintest

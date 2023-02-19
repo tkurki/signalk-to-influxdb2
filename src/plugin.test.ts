@@ -1,5 +1,4 @@
 import { expect } from 'chai'
-import { ZonedDateTime } from '@js-joda/core'
 import { EventEmitter } from 'stream'
 import InfluxPluginFactory, { App, InfluxPlugin, Plugin } from './plugin'
 import waitOn from 'wait-on'
