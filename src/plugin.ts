@@ -16,7 +16,6 @@
 import { SKInflux, SKInfluxConfig } from './influx'
 import { SKDelta } from '@chacal/signalk-ts'
 import { EventEmitter } from 'stream'
-import { ZonedDateTime } from '@js-joda/core'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageInfo = require('../package.json')
