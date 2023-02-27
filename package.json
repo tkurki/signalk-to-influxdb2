@@ -15,7 +15,7 @@
     "prettier": "prettier -w src/",
     "lint": "eslint -c .eslintrc.js --ext .ts --ext .js --fix src/",
     "format": "npm run prettier && npm run lint",
-    "ci-lint": "eslint -c .eslintrc.js --ext .ts --ext .js src/ && prettier --check src/",    
+    "ci-lint": "eslint -c .eslintrc.js --ext .ts --ext .js src/ && prettier --check src/",
     "generate-schema": "./generate-schema >dist/PluginConfig.json",
     "build": "tsc && npm run generate-schema",
     "prepublishOnly": "npm install && npm run build"
@@ -47,6 +47,7 @@
     "@influxdata/influxdb-client-apis": "^1.29.0",
     "@js-joda/core": "^5.3.0",
     "@js-joda/timezone": "^2.12.1",
+    "@signalk/signalk-schema": "^1.6.0",
     "s2-geometry": "^1.2.10"
   }
 }

@@ -16,6 +16,7 @@
 import { SKContext } from '@chacal/signalk-ts'
 import { HttpError, InfluxDB, Point, QueryApi, WriteApi, WriteOptions } from '@influxdata/influxdb-client'
 import { BucketsAPI, OrgsAPI } from '@influxdata/influxdb-client-apis'
+import { getUnits } from '@signalk/signalk-schema'
 
 import { Logging, QueryParams } from './plugin'
 import { S2 } from 's2-geometry'
@@ -58,6 +59,17 @@ interface PathValue {
 
 export const influxPath = (path: string) => (path !== '' ? path : '<empty>')
 
+enum JsValueType {
+  number = 'number',
+  string = 'string',
+  boolean = 'boolean',
+  object = 'object',
+}
+
+const VALUETYPECACHE: {
+  [key: string]: JsValueType
+} = {}
+
 export class SKInflux {
   private influx: InfluxDB
   public org: string
@@ -95,31 +107,11 @@ export class SKInflux {
   }
 
   handleValue(context: SKContext, isSelf: boolean, source: string, pathValue: PathValue) {
-    const point = new Point(influxPath(pathValue.path)).tag('context', context).tag('source', source)
-    if (isSelf) {
-      point.tag(SELF_TAG_NAME, SELF_TAG_VALUE)
-    }
-    if (pathValue.path === 'navigation.position') {
-      point.floatField('lat', pathValue.value.latitude)
-      point.floatField('lon', pathValue.value.longitude)
-      point.tag('s2_cell_id', posToS2CellId(pathValue.value))
-    } else {
-      switch (typeof pathValue.value) {
-        case 'number':
-          point.floatField('value', pathValue.value)
-          break
-        case 'string':
-          point.stringField('value', pathValue.value)
-          break
-        case 'boolean':
-          point.booleanField('value', pathValue.value)
-          break
-        case 'object':
-          point.stringField('value', JSON.stringify(pathValue.value))
-      }
-    }
+    const point = toPoint(context, isSelf, source, pathValue, this.logging.debug)
     this.logging.debug(point)
-    this.writeApi.writePoint(point)
+    if (point) {
+      this.writeApi.writePoint(point)
+    }
   }
 
   flush() {
@@ -133,9 +125,64 @@ export class SKInflux {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getSelfValues(params: Omit<QueryParams, 'context'>): Promise<Array<any>> {
     const query = paramsToQuery(this.bucket, params)
-    console.log(query)
+    // console.log(query)
     return this.queryApi.collectRows(query)
   }
+}
+
+const toPoint = (
+  context: SKContext,
+  isSelf: boolean,
+  source: string,
+  pathValue: PathValue,
+  debug: (s: string) => void,
+) => {
+  const point = new Point(influxPath(pathValue.path)).tag('context', context).tag('source', source)
+  if (isSelf) {
+    point.tag(SELF_TAG_NAME, SELF_TAG_VALUE)
+  }
+  if (pathValue.path === 'navigation.position') {
+    point.floatField('lat', pathValue.value.latitude)
+    point.floatField('lon', pathValue.value.longitude)
+    point.tag('s2_cell_id', posToS2CellId(pathValue.value))
+  } else {
+    const valueType = typeFor(pathValue)
+    try {
+      switch (valueType) {
+        case JsValueType.number:
+          point.floatField('value', pathValue.value)
+          break
+        case JsValueType.string:
+          point.stringField('value', pathValue.value)
+          break
+        case JsValueType.boolean:
+          point.booleanField('value', pathValue.value)
+          break
+        case JsValueType.object:
+          point.stringField('value', JSON.stringify(pathValue.value))
+      }
+    } catch (e) {
+      debug(`Error creating point ${pathValue.path}:${pathValue.value} => ${valueType}`)
+      return undefined
+    }
+  }
+  return point
+}
+
+const typeFor = (pathValue: PathValue): JsValueType => {
+  let r = VALUETYPECACHE[pathValue.path]
+  if (!r) {
+    r = VALUETYPECACHE[pathValue.path] = _typeFor(pathValue)
+  }
+  return r
+}
+
+const _typeFor = (pathValue: PathValue): JsValueType => {
+  const unit = getUnits(`vessels.self.${pathValue.path}`)
+  if (unit && unit !== 'RFC 3339 (UTC)') {
+    return JsValueType.number
+  }
+  return typeof pathValue.value as JsValueType
 }
 
 const paramsToQuery = (bucket: string, params: PartialBy<QueryParams, 'context'>) => {
