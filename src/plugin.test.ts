@@ -20,12 +20,12 @@ describe('Plugin', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
     debug: function (...args: any): void {
       // eslint-disable-next-line no-console
-      console.log(args)
+      console.log(`debug:${args}`)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
     error: function (...args: any): void {
       // eslint-disable-next-line no-console
-      console.log(args)
+      console.error(`debug:${args}`)
     },
     signalk: new EventEmitter(),
     selfId,
@@ -200,4 +200,43 @@ describe('Plugin', () => {
       interval: 50,
     })
   })
+
+  it('Uses data types from schema, initial null value', async () => assertNumericAfterFirstOtherValue(null))
+  it('Uses data types from schema, , initial string value', async () =>
+    assertNumericAfterFirstOtherValue('first string value'))
+
+  const assertNumericAfterFirstOtherValue = (firstValue: string | null) => {
+    const NUMERICSCHEMAPATH = 'navigation.headingTrue'
+    ;[firstValue, 3.14, null, 'last string value'].forEach((value) =>
+      app.signalk.emit('delta', {
+        context: TESTCONTEXT,
+        updates: [
+          {
+            $source: TESTSOURCE,
+            timestamp: new Date('2022-08-17T17:01:00Z'),
+            values: [
+              {
+                path: NUMERICSCHEMAPATH,
+                value,
+              },
+            ],
+          },
+        ],
+      }),
+    )
+
+    const assertData = () =>
+      plugin.flush().then(() =>
+        plugin
+          .getSelfValues({
+            paths: [NUMERICSCHEMAPATH],
+            influxIndex: 0,
+          })
+          .then((rows) => expect(rows.length).to.equal(1)),
+      )
+    return retry(assertData, [null], {
+      retriesMax: 5,
+      interval: 50,
+    })
+  }
 })
