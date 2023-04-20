@@ -16,6 +16,8 @@
 import { SKInflux, SKInfluxConfig } from './influx'
 import { SKDelta } from '@chacal/signalk-ts'
 import { EventEmitter } from 'stream'
+import { registerHistoryApiRoute } from './HistoryAPI'
+import { IRouter } from 'express'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageInfo = require('../package.json')
@@ -26,7 +28,7 @@ export interface Logging {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   error: (...args: any) => void
 }
-export interface App extends Logging {
+export interface App extends Logging, Pick<IRouter, 'get'> {
   signalk: EventEmitter
   selfId: string
   setPluginStatus: (msg: string) => void
@@ -82,6 +84,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
         )
       }
       skInfluxes = config.influxes.map((config: SKInfluxConfig) => new SKInflux(config, app, updatePluginStatus))
+      registerHistoryApiRoute(app, skInfluxes[0], app.selfId, app.debug)
       return Promise.all(skInfluxes.map((skInflux) => skInflux.init())).then(() =>
         app.signalk.on('delta', (delta: SKDelta) => {
           const isSelf = delta.context === selfContext

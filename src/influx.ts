@@ -75,7 +75,7 @@ export class SKInflux {
   public org: string
   public bucket: string
   private writeApi: WriteApi
-  private queryApi: QueryApi
+  public queryApi: QueryApi
   public writtenLinesCount = 0
   public failedLinesCount = 0
   public lastWriteCallbackSucceeded = false
