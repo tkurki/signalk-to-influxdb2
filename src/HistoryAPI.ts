@@ -89,12 +89,12 @@ async function getValues(
   }
   const o: FluxResultObserver<any> = {
     next: (row: string[], tableMeta: FluxTableMetaData) => {
-      valuesResult.data.push([
-        {
-          time: tableMeta.get(row, '_time'),
-          value: tableMeta.get(row, '_value'),
-        },
-      ])
+      const time = tableMeta.get(row, '_time')
+      const dataRow = pathSpecs.map(({ path }) => ({
+        time,
+        value: tableMeta.get(row, path),
+      }))
+      valuesResult.data.push(dataRow)
       return true
     },
     error: (s: Error) => {
@@ -104,19 +104,19 @@ async function getValues(
     complete: () => res.json(valuesResult),
   }
 
+  const measurementsOrClause = pathSpecs.map(({ path }) => `r._measurement == "${path}"`).join(' or ')
   const query = `
     from(bucket: "${influx.bucket}")
-    |> range(start: ${from.format(
-      DateTimeFormatter.ISO_LOCAL_DATE_TIME
-    )}Z, stop: ${to.format(
-      DateTimeFormatter.ISO_LOCAL_DATE_TIME
-    )}Z)
+    |> range(start: ${from.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z, stop: ${to.format(
+    DateTimeFormatter.ISO_LOCAL_DATE_TIME,
+  )}Z)
     |> filter(fn: (r) =>
       r.context == "${context}" and
-      r._measurement == "${pathSpecs[0].path}" and
+      ${measurementsOrClause} and
       r._field == "value"
-    ) 
+    )
     |> aggregateWindow(every: ${timeResolutionSeconds.toFixed(0)}s, fn: ${pathSpecs[0].aggregateFunction})
+    |> pivot(rowKey: ["_time"], columnKey: ["_measurement"], valueColumn: "_value")
     `
   debug(query)
   console.log(query)
