@@ -76,7 +76,6 @@ async function getValues(
     ? Number.parseFloat(req.query.resolution as string)
     : (to.toEpochSecond() - from.toEpochSecond()) / 500
 
-  debug(context)
   const pathExpressions = ((req.query.paths as string) || '').replace(/[^0-9a-z\.,\:]/gi, '').split(',')
   const pathSpecs: PathSpec[] = pathExpressions.map(splitPathExpression)
   const valuesResult: ValuesResult = {
@@ -119,6 +118,7 @@ async function getValues(
     ) 
     |> aggregateWindow(every: ${timeResolutionSeconds.toFixed(0)}s, fn: ${pathSpecs[0].aggregateFunction})
     `
+  debug(query)
   console.log(query)
   influx.queryApi.queryRows(query, o)
 }
