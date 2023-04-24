@@ -109,6 +109,7 @@ async function getValues(
     from(bucket: "${influx.bucket}")
     |> range(start: ${from.toString()}, stop: ${to.toString()})
     |> filter(fn: (r) =>
+      r.context == "${context}" and
       r._measurement == "${pathSpecs[0].path}" and
       r._field == "value"
     ) 
