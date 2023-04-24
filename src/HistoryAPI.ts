@@ -1,4 +1,4 @@
-import { ZonedDateTime } from '@js-joda/core'
+import { DateTimeFormatter, ZonedDateTime } from '@js-joda/core'
 
 import { Request, Response, Router } from 'express'
 import { SKInflux } from './influx'
@@ -107,7 +107,11 @@ async function getValues(
 
   const query = `
     from(bucket: "${influx.bucket}")
-    |> range(start: ${from.toString()}, stop: ${to.toString()})
+    |> range(start: ${from.format(
+      DateTimeFormatter.ISO_LOCAL_DATE_TIME
+    )}Z, stop: ${to.format(
+      DateTimeFormatter.ISO_LOCAL_DATE_TIME
+    )}Z)
     |> filter(fn: (r) =>
       r.context == "${context}" and
       r._measurement == "${pathSpecs[0].path}" and
