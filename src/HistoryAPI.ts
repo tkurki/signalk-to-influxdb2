@@ -14,24 +14,22 @@ export function registerHistoryApiRoute(
     const { from, to, context } = getFromToContext(req as FromToContextRequest, selfId)
     getValues(influx, context, from, to, debug, req, res)
   })
-  // router.get(
-  //   "/signalk/v1/history/contexts",
+  router.get(
+    "/signalk/v1/history/contexts", (req: Request, res: Response) => getContexts(influx, res))
   // router.get(
   //   "/signalk/v1/history/paths",
 }
 
 async function getContexts(
   influx: SKInflux,
-  from: ZonedDateTime,
-  to: ZonedDateTime,
-  debug: (s: string) => void,
-): Promise<string[]> {
-  return Promise.resolve(['self'])
-  // return influx
-  //   .then((i) =>
-  //     i.query('SHOW TAG VALUES FROM "navigation.position" WITH KEY = "context"')
-  //   )
-  //   .then((x: any) => x.map((x) => x.value));
+  res: Response
+) {
+  influx.queryApi.collectRows(`
+  import "influxdata/influxdb/v1"
+  v1.tagValues(bucket: "signalk_bucket", tag: "context")
+  `, (row, tableMeta) => {
+    return tableMeta.get(row, '_value')
+  }).then(r => res.json(r))
 }
 
 async function getPaths(
