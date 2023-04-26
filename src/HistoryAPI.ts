@@ -14,35 +14,37 @@ export function registerHistoryApiRoute(
     const { from, to, context } = getFromToContext(req as FromToContextRequest, selfId)
     getValues(influx, context, from, to, debug, req, res)
   })
-  router.get(
-    "/signalk/v1/history/contexts", (req: Request, res: Response) => getContexts(influx, res))
-  // router.get(
-  //   "/signalk/v1/history/paths",
+  router.get('/signalk/v1/history/contexts', (req: Request, res: Response) => getContexts(influx, res))
+  router.get('/signalk/v1/history/paths', (req: Request, res: Response) => {
+    const { from, to } = getFromToContext(req as FromToContextRequest, selfId)
+    getPaths(influx, from, to, res)
+  })
 }
 
-async function getContexts(
-  influx: SKInflux,
-  res: Response
-) {
-  influx.queryApi.collectRows(`
+async function getContexts(influx: SKInflux, res: Response) {
+  influx.queryApi
+    .collectRows(
+      `
   import "influxdata/influxdb/v1"
   v1.tagValues(bucket: "signalk_bucket", tag: "context")
-  `, (row, tableMeta) => {
-    return tableMeta.get(row, '_value')
-  }).then(r => res.json(r))
+  `,
+      (row, tableMeta) => {
+        return tableMeta.get(row, '_value')
+      },
+    )
+    .then((r) => res.json(r))
 }
 
-async function getPaths(
-  influx: SKInflux,
-  from: ZonedDateTime,
-  to: ZonedDateTime,
-  debug: (s: string) => void,
-  req: Request,
-): Promise<string[]> {
-  // const query = `SHOW MEASUREMENTS`;
-  // console.log(query);
-  // return influx.then((i) => i.query(query)).then((d) => d.map((r:any) => r.name));
-  return Promise.resolve(['navigation.speedOverGround'])
+async function getPaths(influx: SKInflux, from: ZonedDateTime, to: ZonedDateTime, res: Response) {
+  const r = await influx.queryApi.collectRows(
+    `
+    import "influxdata/influxdb/schema"
+    schema.measurements(bucket: "${influx.bucket}")`,
+    (row, tableMeta) => {
+      return tableMeta.get(row, '_value')
+    },
+  )
+  res.json(r)
 }
 
 interface ValuesResult {
