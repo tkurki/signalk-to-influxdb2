@@ -88,22 +88,6 @@ async function getValues(
     values: pathSpecs.map(({ path, aggregateMethod }: PathSpec) => ({ path, method: aggregateMethod })),
     data: [],
   }
-  const o: FluxResultObserver<any> = {
-    next: (row: string[], tableMeta: FluxTableMetaData) => {
-      const time = tableMeta.get(row, '_time')
-      const dataRow = pathSpecs.map(({ path }) => ({
-        time,
-        value: tableMeta.get(row, path),
-      }))
-      valuesResult.data.push(dataRow)
-      return true
-    },
-    error: (s: Error) => {
-      res.status(500)
-      res.json(s)
-    },
-    complete: () => res.json(valuesResult),
-  }
 
   const measurementsOrClause = pathSpecs.map(({ path }) => `r._measurement == "${path}"`).join(' or ')
   const query = `
@@ -116,11 +100,27 @@ async function getValues(
       ${measurementsOrClause} and
       r._field == "value"
     )
-    |> aggregateWindow(every: ${timeResolutionSeconds.toFixed(0)}s, fn: ${pathSpecs[0].aggregateFunction})
+    |> aggregateWindow(every: ${timeResolutionMillis.toFixed(0)}ms, fn: ${pathSpecs[0].aggregateFunction})
     |> pivot(rowKey: ["_time"], columnKey: ["_measurement"], valueColumn: "_value")
     `
   debug(query)
   console.log(query)
+
+  const o: FluxResultObserver<any> = {
+    next: (row: string[], tableMeta: FluxTableMetaData) => {
+      const time = tableMeta.get(row, '_time')
+      const dataRow = [time, ...pathSpecs.map(({ path }) => tableMeta.get(row, path))]
+      valuesResult.data.push(dataRow)
+      return true
+    },
+    error: (s: Error) => {
+      console.error(s.message)
+      console.error(query)
+      res.status(500)
+      res.json(s)
+    },
+    complete: () => res.json(valuesResult),
+  }
   influx.queryApi.queryRows(query, o)
 }
 
@@ -186,7 +186,11 @@ type FromToContextRequest = Request<
 >
 
 const getFromToContext = ({ query }: FromToContextRequest, selfId: string) => {
-  const from = ZonedDateTime.parse(query['from'])
-  const to = ZonedDateTime.parse(query['to'])
-  return { from, to, context: getContext(query.context, selfId) }
+  try {
+    const from = ZonedDateTime.parse(query['from'])
+    const to = ZonedDateTime.parse(query['to'])
+    return { from, to, context: getContext(query.context, selfId) }
+  } catch (e: unknown) {
+    throw new Error(`Error extracting from/to query parameters from ${JSON.stringify(query)}`)
+  }
 }
