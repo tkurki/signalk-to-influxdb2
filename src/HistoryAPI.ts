@@ -72,9 +72,10 @@ async function getValues(
   req: Request,
   res: Response,
 ): Promise<ValuesResult | void> {
-  const timeResolutionSeconds = req.query.resolution
-    ? Number.parseFloat(req.query.resolution as string)
-    : (to.toEpochSecond() - from.toEpochSecond()) / 500
+  const timeResolutionMillis =
+    (req.query.resolution
+      ? Number.parseFloat(req.query.resolution as string)
+      : (to.toEpochSecond() - from.toEpochSecond()) / 500) * 1000
 
   const pathExpressions = ((req.query.paths as string) || '').replace(/[^0-9a-z\.,\:]/gi, '').split(',')
   const pathSpecs: PathSpec[] = pathExpressions.map(splitPathExpression)
