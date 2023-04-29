@@ -90,7 +90,7 @@ async function getValues(
   }
 
   const measurementsOrClause = pathSpecs.map(({ path }) => `r._measurement == "${path}"`).join(' or ')
-  const query = `
+  let query = `
     from(bucket: "${influx.bucket}")
     |> range(start: ${from.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z, stop: ${to.format(
     DateTimeFormatter.ISO_LOCAL_DATE_TIME,
@@ -103,13 +103,30 @@ async function getValues(
     |> aggregateWindow(every: ${timeResolutionMillis.toFixed(0)}ms, fn: ${pathSpecs[0].aggregateFunction})
     |> pivot(rowKey: ["_time"], columnKey: ["_measurement"], valueColumn: "_value")
     `
+
+  if (pathSpecs[0].path === 'navigation.position') {
+    query = `
+    import "influxdata/influxdb/schema"
+
+    from(bucket: "signalk_bucket")
+    |> range(start: ${from.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z, stop: ${to.format(
+      DateTimeFormatter.ISO_LOCAL_DATE_TIME,
+    )}Z)
+      |> filter(fn: (r) =>
+      r.context == "${context}" and
+      r._measurement == "navigation.position")
+    |> schema.fieldsAsCols()
+    |> group()
+    |> sort(columns: ["_time"])
+    `
+  }
   debug(query)
   console.log(query)
 
   const o: FluxResultObserver<any> = {
     next: (row: string[], tableMeta: FluxTableMetaData) => {
       const time = tableMeta.get(row, '_time')
-      const dataRow = [time, ...pathSpecs.map(({ path }) => tableMeta.get(row, path))]
+      const dataRow = [time, ...pathSpecs.map((pathSpec) => pathSpec.extractValue(pathSpec.path, row, tableMeta))]
       valuesResult.data.push(dataRow)
       return true
     },
@@ -131,25 +148,19 @@ function getContext(contextFromQuery: string, selfId: string) {
   return contextFromQuery.replace(/ /gi, '')
 }
 
+type ExtractValue = (path: string, row: string[], tableMeta: FluxTableMetaData) => any
+
 interface PathSpec {
   path: string
   aggregateMethod: string
   aggregateFunction: string
-  extractValue: (x: any) => any
+  extractValue: ExtractValue
 }
-
-interface WithValue {
-  value?: any
-}
-type ExtractValue = (r: WithValue) => any
-const EXTRACT_POSITION = (r: WithValue) => {
-  if (r.value) {
-    const position = JSON.parse(r.value)
-    return [position.longitude, position.latitude]
-  }
-  return null
-}
-const EXTRACT_NUMBER = (r: WithValue) => Number(r.value)
+const EXTRACT_POSITION = (path: string, row: string[], tableMeta: FluxTableMetaData) => [
+  tableMeta.get(row, 'lon'),
+  tableMeta.get(row, 'lat'),
+]
+const EXTRACT_NUMBER = (path: string, row: string[], tableMeta: FluxTableMetaData) => tableMeta.get(row, path)
 
 function splitPathExpression(pathExpression: string): PathSpec {
   const parts = pathExpression.split(':')
