@@ -32,7 +32,7 @@ describe('Plugin', () => {
     setPluginStatus: (s: string) => console.log(s),
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
-    get: () => undefined
+    get: () => undefined,
   }
 
   before(async () => {
