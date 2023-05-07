@@ -61,6 +61,7 @@ interface ValuesResult {
   data: ValuesResultRow[]
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ValuesResultRow = any[]
 
 async function getValues(
@@ -77,7 +78,7 @@ async function getValues(
       ? Number.parseFloat(req.query.resolution as string)
       : (to.toEpochSecond() - from.toEpochSecond()) / 500) * 1000
 
-  const pathExpressions = ((req.query.paths as string) || '').replace(/[^0-9a-z\.,\:]/gi, '').split(',')
+  const pathExpressions = ((req.query.paths as string) || '').replace(/[^0-9a-z.,:]/gi, '').split(',')
   const pathSpecs: PathSpec[] = pathExpressions.map(splitPathExpression)
   const valuesResult: ValuesResult = {
     context,
@@ -135,8 +136,8 @@ async function getValues(
     `
   }
   debug(query)
-  console.log(query)
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const o: FluxResultObserver<any> = {
     next: (row: string[], tableMeta: FluxTableMetaData) => {
       const time = tableMeta.get(row, '_time')
@@ -162,6 +163,7 @@ function getContext(contextFromQuery: string, selfId: string) {
   return contextFromQuery.replace(/ /gi, '')
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ExtractValue = (path: string, row: string[], tableMeta: FluxTableMetaData) => any
 
 interface PathSpec {

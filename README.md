@@ -18,3 +18,8 @@ Discussion in [Signal K Slack](https://signalk-dev.slack.com/) ([get invited](ht
 ### Details
 
 - data for Signal K "self" vessel is tagged with tag `self` with value `t`
+
+
+http://localhost:3000/signalk/v1/history/values?from=2023-04-23T18:51:26Z&to=2023-04-23T19:58:43Z&paths=environment.wind.angleApparent:min
+
+http://localhost:3000/signalk/v1/history/values?from=2023-04-23T18:53:20Z&to=2023-04-23T18:55:00Z&paths=environment.wind.angleApparent:min,navigation.speedOverGround:max&resolution=40
