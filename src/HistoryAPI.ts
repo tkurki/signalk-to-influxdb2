@@ -26,7 +26,7 @@ async function getContexts(influx: SKInflux, res: Response) {
     .collectRows(
       `
   import "influxdata/influxdb/v1"
-  v1.tagValues(bucket: "signalk_bucket", tag: "context")
+  v1.tagValues(bucket: "${influx.bucket}", tag: "context")
   `,
       (row, tableMeta) => {
         return tableMeta.get(row, '_value')
