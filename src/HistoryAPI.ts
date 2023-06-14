@@ -107,31 +107,15 @@ async function getValues(
 
   if (pathSpecs[0].path === 'navigation.position') {
     query = `
-    lat =
-    from(bucket: "signalk_bucket")
+    from(bucket: "${influx.bucket}")
     |> range(start: ${from.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z, stop: ${to.format(
       DateTimeFormatter.ISO_LOCAL_DATE_TIME,
     )}Z)
     |> filter(fn: (r) =>
       r.context == "${context}" and
-      r._measurement == "navigation.position" and r._field == "lat")
-    |> drop(columns: ["s2_cell_id"])
+      r._measurement == "navigation.position" and (r._field == "lat" or r._field == "lon") )
     |> aggregateWindow(every: ${timeResolutionMillis.toFixed(0)}ms, fn: first)
     |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
-
-    lon =
-    from(bucket: "signalk_bucket")
-    |> range(start: ${from.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z, stop: ${to.format(
-      DateTimeFormatter.ISO_LOCAL_DATE_TIME,
-    )}Z)
-    |> filter(fn: (r) =>
-      r.context == "${context}" and
-      r._measurement == "navigation.position" and r._field == "lon")
-    |> drop(columns: ["s2_cell_id"])
-    |> aggregateWindow(every: ${timeResolutionMillis.toFixed(0)}ms, fn: first)
-    |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
-
-    join(tables: {lat, lon}, on: ["_time"])
     |> keep(columns: ["_time", "lat", "lon"])
     `
   }
