@@ -46,6 +46,13 @@ export interface SKInfluxConfig {
    */
   bucket: string
 
+  /**
+   * @title Store only self data
+   * @default true
+   * @description Store data only for "self" data, not for example AIS targets' data
+   */
+  onlySelf: boolean
+
   writeOptions: Partial<WriteOptions>
 }
 
@@ -80,12 +87,14 @@ export class SKInflux {
   public failedLinesCount = 0
   public lastWriteCallbackSucceeded = false
   public url: string
+  private onlySelf: boolean
   constructor(config: SKInfluxConfig, private logging: Logging, triggerStatusUpdate: () => void) {
-    const { org, bucket } = config
+    const { org, bucket, url, onlySelf } = config
     this.influx = new InfluxDB(config)
     this.org = org
     this.bucket = bucket
-    this.url = config.url
+    this.url = url
+    this.onlySelf = onlySelf
     this.writeApi = this.influx.getWriteApi(org, bucket, 'ms', {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       writeFailed: (_error, lines, _attempt, _expires) => {
@@ -107,10 +116,12 @@ export class SKInflux {
   }
 
   handleValue(context: SKContext, isSelf: boolean, source: string, pathValue: PathValue) {
-    const point = toPoint(context, isSelf, source, pathValue, this.logging.debug)
-    this.logging.debug(point)
-    if (point) {
-      this.writeApi.writePoint(point)
+    if (!this.onlySelf || isSelf) {
+      const point = toPoint(context, isSelf, source, pathValue, this.logging.debug)
+      this.logging.debug(point)
+      if (point) {
+        this.writeApi.writePoint(point)
+      }
     }
   }
 
