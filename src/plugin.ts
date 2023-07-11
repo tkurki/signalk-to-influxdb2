@@ -88,11 +88,15 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
       return Promise.all(skInfluxes.map((skInflux) => skInflux.init())).then(() =>
         app.signalk.on('delta', (delta: SKDelta) => {
           const isSelf = delta.context === selfContext
-          delta.updates.forEach((update) => {
-            update.values.forEach((pathValue) => {
-              skInfluxes.forEach((skInflux) => skInflux.handleValue(delta.context, isSelf, update.$source, pathValue))
+          delta.updates &&
+            delta.updates.forEach((update) => {
+              update.values &&
+                update.values.forEach((pathValue) => {
+                  skInfluxes.forEach((skInflux) =>
+                    skInflux.handleValue(delta.context, isSelf, update.$source, pathValue),
+                  )
+                })
             })
-          })
         }),
       )
     },
