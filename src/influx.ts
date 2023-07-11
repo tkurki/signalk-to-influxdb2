@@ -152,12 +152,21 @@ const toPoint = (
   if (isSelf) {
     point.tag(SELF_TAG_NAME, SELF_TAG_VALUE)
   }
-  if (pathValue.path === 'navigation.position') {
+  if (
+    pathValue.path === 'navigation.position' &&
+    typeof pathValue.value === 'object' &&
+    pathValue.value !== null &&
+    !isNaN(pathValue.value.latitude) &&
+    !isNaN(pathValue.value.longitude)
+  ) {
     point.floatField('lat', pathValue.value.latitude)
     point.floatField('lon', pathValue.value.longitude)
     point.tag('s2_cell_id', posToS2CellId(pathValue.value))
   } else {
     const valueType = typeFor(pathValue)
+    if (pathValue.value === null) {
+      return
+    }
     try {
       switch (valueType) {
         case JsValueType.number:
