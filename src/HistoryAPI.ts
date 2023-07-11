@@ -117,6 +117,7 @@ async function getValues(
     |> aggregateWindow(every: ${timeResolutionMillis.toFixed(0)}ms, fn: first)
     |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
     |> keep(columns: ["_time", "lat", "lon"])
+    |> sort(columns:["_time"])
     `
   }
   debug(query)
