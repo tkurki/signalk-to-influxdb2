@@ -16,6 +16,7 @@
 import { SKContext } from '@chacal/signalk-ts'
 import { HttpError, InfluxDB, Point, QueryApi, WriteApi, WriteOptions } from '@influxdata/influxdb-client'
 import { BucketsAPI, OrgsAPI } from '@influxdata/influxdb-client-apis'
+import { InfluxDB as InfluxV1 } from 'influx'
 import { getUnits } from '@signalk/signalk-schema'
 
 import { Logging, QueryParams } from './plugin'
@@ -88,6 +89,8 @@ export class SKInflux {
   public lastWriteCallbackSucceeded = false
   public url: string
   private onlySelf: boolean
+  public v1Client: InfluxV1
+
   constructor(config: SKInfluxConfig, private logging: Logging, triggerStatusUpdate: () => void) {
     const { org, bucket, url, onlySelf } = config
     this.influx = new InfluxDB(config)
@@ -109,6 +112,21 @@ export class SKInflux {
       },
     })
     this.queryApi = this.influx.getQueryApi(org)
+    const parsedUrl = new URL(url)
+    this.v1Client = new InfluxV1({
+      host: parsedUrl.hostname,
+      username: org,
+      // leave password empty
+      password: '',
+      port: Number(parsedUrl.port),
+      protocol: <'http' | 'https'>parsedUrl.protocol.slice(0, -1),
+      database: bucket,
+      options: {
+        headers: {
+          Authorization: `Token ${config.token}`,
+        },
+      },
+    })
   }
 
   init() {
