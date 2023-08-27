@@ -179,8 +179,9 @@ export function getValues(
 
   influx.v1Client
     .query(query)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .then((rows: any[]) => {
+    .then((result) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = result as any[]
       debug(`got rows ${Date.now() - start}`)
       const resultLength = rows.length / uniquePaths.length
       const resultData = makeArray(resultLength, pathSpecs.length + 1)
@@ -188,13 +189,21 @@ export function getValues(
       for (let j = 0; j < resultLength; j++) {
         resultData[j][0] = rows[j].time.toISOString()
       }
-      pathSpecs.forEach((ps, i) => {
-        const pathIndex = uniquePaths.indexOf(ps.path)
-        const firstRow = pathIndex * resultLength
-        const fieldIndex = i + 1 // first is Date
-        for (let j = 0; j < resultLength; j++) {
-          resultData[j][fieldIndex] = rows[firstRow + j][ps.aggregateFunction]
-        }
+
+      result.groups().forEach((group) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const groupPathSpecs = pathSpecs.reduce<any[]>((acc, ps, i) => {
+          if (ps.path === group.name) {
+            acc.push([i + 1, ps.aggregateFunction])
+          }
+          return acc
+        }, [])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        group.rows.forEach((row: any, i) => {
+          groupPathSpecs.forEach(([fieldIndex, fieldName]) => {
+            resultData[i][fieldIndex] = row[fieldName]
+          })
+        })
       })
       debug(`rows done ${Date.now() - start}`)
       res.json({
