@@ -174,6 +174,8 @@ const toPoint = (
     pathValue.path === 'navigation.position' &&
     typeof pathValue.value === 'object' &&
     pathValue.value !== null &&
+    pathValue.value.latitude !== null &&
+    pathValue.value.longitude !== null &&
     !isNaN(pathValue.value.latitude) &&
     !isNaN(pathValue.value.longitude)
   ) {
