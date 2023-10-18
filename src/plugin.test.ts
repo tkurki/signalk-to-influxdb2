@@ -60,6 +60,8 @@ describe('Plugin', () => {
             flushInterval: 10,
             maxRetries: 1,
           },
+          ignoredPaths: [],
+          ignoredSources: [],
         },
       ],
     })

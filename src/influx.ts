@@ -54,6 +54,20 @@ export interface SKInfluxConfig {
    */
   onlySelf: boolean
 
+  /**
+   * @title Ignored paths
+   * @default []
+   * @description Paths that should be ignored and not written to InfluxDB (JS regular expressions work)
+   */
+  ignoredPaths: string[]
+
+  /**
+   * @title Ignored sources
+   * @default []
+   * @description Sources whose data should be ignored and not written to InfluxDB (JS regular expressions work)
+   */
+  ignoredSources: string[]
+
   writeOptions: Partial<WriteOptions>
 }
 
@@ -90,14 +104,21 @@ export class SKInflux {
   public url: string
   private onlySelf: boolean
   public v1Client: InfluxV1
+  private ignoreStatusForPathSources: {
+    [path: string]: boolean
+  } = {}
+  private ignoredPaths: string[]
+  private ignoredSources: string[]
 
   constructor(config: SKInfluxConfig, private logging: Logging, triggerStatusUpdate: () => void) {
-    const { org, bucket, url, onlySelf } = config
+    const { org, bucket, url, onlySelf, ignoredPaths, ignoredSources } = config
     this.influx = new InfluxDB(config)
     this.org = org
     this.bucket = bucket
     this.url = url
     this.onlySelf = onlySelf
+    this.ignoredPaths = ignoredPaths
+    this.ignoredSources = ignoredSources
     this.writeApi = this.influx.getWriteApi(org, bucket, 'ms', {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       writeFailed: (_error, lines, _attempt, _expires) => {
@@ -134,6 +155,9 @@ export class SKInflux {
   }
 
   handleValue(context: SKContext, isSelf: boolean, source: string, pathValue: PathValue) {
+    if (this.isIgnored(pathValue.path, source)) {
+      return
+    }
     if (!this.onlySelf || isSelf) {
       const point = toPoint(context, isSelf, source, pathValue, this.logging.debug)
       this.logging.debug(point)
@@ -156,6 +180,31 @@ export class SKInflux {
     const query = paramsToQuery(this.bucket, params)
     // console.log(query)
     return this.queryApi.collectRows(query)
+  }
+
+  isIgnored(path: string, sourceRef: string): boolean {
+    const pathSource = `${path}:${sourceRef}`
+    let ignoreStatus = this.ignoreStatusForPathSources[pathSource]
+    if (ignoreStatus === undefined) {
+      ignoreStatus = this.ignoreStatusForPathSources[pathSource] = this.ignoreStatusByConfig(path, sourceRef)
+    }
+    return ignoreStatus
+  }
+
+  ignoreStatusByConfig(path: string, sourceRef: string) {
+    const ignoredByPath = this.ignoredPaths.reduce<boolean>((acc, ignoredPathExp) => {
+      const ignoredPathRegExp = new RegExp(ignoredPathExp.replace(/\./g, '.'))
+      const ignored = ignoredPathRegExp.test(path)
+      ignored && this.logging.debug(`${path} from ${sourceRef} will be ignored by ${ignoredPathRegExp}`)
+      return acc || ignored
+    }, false)
+    const ignoredBySource = this.ignoredSources.reduce<boolean>((acc, ignoredSourceExp) => {
+      const ignoredSourceRegExp = new RegExp(ignoredSourceExp.replace(/\./g, '.'))
+      const ignored = ignoredSourceRegExp.test(sourceRef)
+      ignored && this.logging.debug(`${path} from ${sourceRef} will be ignored by ${ignoredSourceRegExp}`)
+      return acc || ignored
+    }, false)
+    return ignoredByPath || ignoredBySource
   }
 }
 

@@ -19,6 +19,8 @@ const skinflux = new SKInflux(
     bucket: process.env.BUCKET || '!!!',
     org: process.env.ORG || '!!!',
     writeOptions: {},
+    ignoredPaths: [],
+    ignoredSources: [],
   },
   logging,
   () => undefined,
