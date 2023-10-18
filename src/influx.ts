@@ -160,7 +160,6 @@ export class SKInflux {
     }
     if (!this.onlySelf || isSelf) {
       const point = toPoint(context, isSelf, source, pathValue, this.logging.debug)
-      this.logging.debug(point)
       if (point) {
         this.writeApi.writePoint(point)
       }
