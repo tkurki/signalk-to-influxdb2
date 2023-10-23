@@ -190,20 +190,28 @@ export class SKInflux {
     return ignoreStatus
   }
 
-  ignoreStatusByConfig(path: string, sourceRef: string) {
-    const ignoredByPath = this.ignoredPaths.reduce<boolean>((acc, ignoredPathExp) => {
-      const ignoredPathRegExp = new RegExp(ignoredPathExp.replace(/\./g, '.'))
-      const ignored = ignoredPathRegExp.test(path)
-      ignored && this.logging.debug(`${path} from ${sourceRef} will be ignored by ${ignoredPathRegExp}`)
-      return acc || ignored
-    }, false)
-    const ignoredBySource = this.ignoredSources.reduce<boolean>((acc, ignoredSourceExp) => {
-      const ignoredSourceRegExp = new RegExp(ignoredSourceExp.replace(/\./g, '.'))
-      const ignored = ignoredSourceRegExp.test(sourceRef)
-      ignored && this.logging.debug(`${path} from ${sourceRef} will be ignored by ${ignoredSourceRegExp}`)
-      return acc || ignored
-    }, false)
-    return ignoredByPath || ignoredBySource
+  ignoreStatusByConfig(path: string, sourceRef: string): boolean {
+    try {
+      const ignoredByPath =
+        this.ignoredPaths?.reduce<boolean>((acc, ignoredPathExp) => {
+          const ignoredPathRegExp = new RegExp(ignoredPathExp.replace(/\./g, '.'))
+          const ignored = ignoredPathRegExp.test(path)
+          ignored && this.logging.debug(`${path} from ${sourceRef} will be ignored by ${ignoredPathRegExp}`)
+          return acc || ignored
+        }, false) || false
+      const ignoredBySource =
+        this.ignoredSources?.reduce<boolean>((acc, ignoredSourceExp) => {
+          const ignoredSourceRegExp = new RegExp(ignoredSourceExp.replace(/\./g, '.'))
+          const ignored = ignoredSourceRegExp.test(sourceRef)
+          ignored && this.logging.debug(`${path} from ${sourceRef} will be ignored by ${ignoredSourceRegExp}`)
+          return acc || ignored
+        }, false) || false
+      return ignoredByPath || ignoredBySource
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (e: any) {
+      this.logging.error(e.message)
+      return false
+    }
   }
 }
 
