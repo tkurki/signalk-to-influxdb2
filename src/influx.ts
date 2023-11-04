@@ -15,7 +15,7 @@
 
 import { SKContext } from '@chacal/signalk-ts'
 import { HttpError, InfluxDB, Point, QueryApi, WriteApi, WriteOptions } from '@influxdata/influxdb-client'
-import { BucketsAPI, OrgsAPI } from '@influxdata/influxdb-client-apis'
+import { BucketsAPI, DbrpsAPI, OrgsAPI } from '@influxdata/influxdb-client-apis'
 import { InfluxDB as InfluxV1 } from 'influx'
 import { getUnits } from '@signalk/signalk-schema'
 
@@ -150,8 +150,40 @@ export class SKInflux {
     })
   }
 
-  init() {
-    return ensureBucketExists(this.influx, this.org, this.bucket)
+  async init() {
+    const bucketId = await ensureBucketExists(this.influx, this.org, this.bucket)
+    try {
+      await this.ensureV1MappingExists(bucketId)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      this.logging.error('Could not verify or create v1 database mapping, history api will not work')
+      this.logging.error(err)
+    }
+  }
+
+  async ensureV1MappingExists(bucketId: string | undefined) {
+    if (!bucketId) {
+      throw new Error('No bucketid')
+    }
+    const dbrsApi = new DbrpsAPI(this.influx)
+    const dbrs = await dbrsApi.getDBRPs({ org: this.org })
+    if (!dbrs.content) {
+      throw new Error('Error retrieving dbrs')
+    }
+    //is there mapping where v1 database name is the same as bucket
+    if (!dbrs.content.find((dbr) => dbr.database === this.bucket)) {
+      await dbrsApi.postDBRP({
+        body: {
+          org: this.org,
+          database: this.bucket,
+          bucketID: bucketId,
+          retention_policy: 'default',
+          default: true,
+        },
+      })
+      this.logging.debug(`Created database retention policy`)
+      console.log('Created database retention policy')
+    }
   }
 
   handleValue(context: SKContext, isSelf: boolean, source: string, pathValue: PathValue) {
@@ -297,7 +329,7 @@ const posToS2CellId = (position: { latitude: number; longitude: number }) => {
   return S2.keyToId(cell.toHilbertQuadkey())
 }
 
-async function ensureBucketExists(influx: InfluxDB, org: string, name: string) {
+async function ensureBucketExists(influx: InfluxDB, org: string, name: string): Promise<string | undefined> {
   const orgsAPI = new OrgsAPI(influx)
   const organizations = await orgsAPI.getOrgs({ org })
   if (!organizations || !organizations.orgs || !organizations.orgs.length) {
@@ -308,6 +340,10 @@ async function ensureBucketExists(influx: InfluxDB, org: string, name: string) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const buckets = await bucketsAPI.getBuckets({ orgID, name })
+    if (!buckets.buckets) {
+      throw new Error('Retrieving buckets failed')
+    }
+    return buckets.buckets[0].id
   } catch (e) {
     if (e instanceof HttpError && e.statusCode == 404) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
