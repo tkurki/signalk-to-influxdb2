@@ -24,3 +24,5 @@ Discussion in [Signal K Slack](https://signalk-dev.slack.com/) ([get invited](ht
 The plugin implements the Signal K History API, allowing retrieval of historical data with urls like
 - http://localhost:3000/signalk/v1/history/values?from=2023-04-23T18:51:26Z&to=2023-04-23T19:58:43Z&paths=environment.wind.angleApparent:min
 - http://localhost:3000/signalk/v1/history/values?from=2023-04-23T18:53:20Z&to=2023-04-23T18:55:00Z&paths=environment.wind.angleApparent:min,navigation.speedOverGround:max&resolution=40
+
+.
