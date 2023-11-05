@@ -28,14 +28,15 @@ const skinflux = new SKInflux(
 const context = process.env.CONTEXT || 'no-context'
 const start = ZonedDateTime.parse('2023-07-24T13:03:29.048Z')
 const end = ZonedDateTime.parse('2023-07-24T13:04:29.048Z')
+const format = ''
 const req = {
   query: {
     paths: process.env.PATHS,
     resolution: '60s',
   },
 }
-const resp = {
-  status: (n: number) => undefined,
-  json: (s: any) => console.log(JSON.stringify(s, null, 2)),
-}
-getValues(skinflux, context, start, end, toConsole, req, resp)
+// const resp = {
+//   status: (n: number) => undefined,
+//   json: (s: any) => console.log(JSON.stringify(s, null, 2)),
+// }
+//getValues(skinflux, context, start, end, format, toConsole, req, resp)
