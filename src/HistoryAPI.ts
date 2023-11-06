@@ -5,6 +5,8 @@ import { SKInflux } from './influx'
 import { InfluxDB as InfluxV1 } from 'influx'
 import { FluxResultObserver, FluxTableMetaData } from '@influxdata/influxdb-client'
 
+const supportedFormats: readonly string[] = ['gpx', 'json']
+
 function makeArray(d1: number, d2: number) {
   const arr = []
   for (let i = 0; i < d1; i++) {
@@ -112,21 +114,51 @@ function getPositions(
 
   debug(query)
 
+  if (format) format = format.toLowerCase()
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   v1Client.query(query).then((rows: any[]) => {
-    if (format === 'gpx') {
-      let responseBody = `<?xml version="1.0" encoding="UTF-8" ?>
-      <gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="signalk-to-influxdb2">
-        <metadata><author>${context}</author></metadata>
-        <trk><trkseg>`
-      rows.forEach((p) => {
-        if (p.lat != null && p.lon != null) responseBody += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${p.time.toISOString()}</time></trkpt>`
-      })
-      responseBody += `</trkseg></trk></gpx>`
-      res.header("Content-Type", "application/xml")
-      res.status(200)
-      res.send(responseBody)
+    if (format && format !== 'json') {
+      // output data in custom format
+      if (supportedFormats.includes(format)) {
+        if (format === 'gpx') {
+          let responseBody = `<?xml version="1.0" encoding="UTF-8" ?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="signalk-to-influxdb2">
+<metadata><author>${context}</author></metadata>
+<trk>`
+          let inSegment = false;
+          rows.forEach((p) => {
+            if (p.lat != null && p.lon != null) {
+              if (!inSegment) {
+                responseBody += '\n<trseg>'
+                inSegment = true
+              }
+              responseBody += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${p.time.toISOString()}</time></trkpt>`
+            } else {
+              if (inSegment) {
+                responseBody += '</trseg>'
+                inSegment = false
+              }
+            }
+          })
+          if (inSegment) responseBody += '</trseg>'
+          responseBody += `
+</trk>
+</gpx>`
+          res.header("Content-Type", "application/xml")
+          res.status(200)
+          res.send(responseBody)
+        }
+      } else {
+        // requested format not supported, return error with list of supported formats
+        res.status(400)
+        res.json({
+          status: '400',
+          detail: 'Format \'' + format + '\' is not supported. Supported formats are: ' + supportedFormats + '.'
+        })
+      }
     } else {
+      // output data as plain json
       const resultData = rows.map((row) => {
         return [row.time.toISOString(), [row.lon, row.lat]]
       })
