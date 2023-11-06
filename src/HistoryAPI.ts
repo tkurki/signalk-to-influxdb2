@@ -22,12 +22,12 @@ export function registerHistoryApiRoute(
   debug: (k: string) => void,
 ) {
   router.get('/signalk/v1/history/values', (req: Request, res: Response) => {
-    const { from, to, context, format } = getFromToContext(req as FromToContextRequest, selfId)
+    const { from, to, context, format } = getRequestParams(req as FromToContextRequest, selfId)
     getValues(influx, context, from, to, format, debug, req, res)
   })
   router.get('/signalk/v1/history/contexts', (req: Request, res: Response) => getContexts(influx, res))
   router.get('/signalk/v1/history/paths', (req: Request, res: Response) => {
-    const { from, to } = getFromToContext(req as FromToContextRequest, selfId)
+    const { from, to } = getRequestParams(req as FromToContextRequest, selfId)
     getPaths(influx, from, to, res)
   })
 }
@@ -118,59 +118,13 @@ function getPositions(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   v1Client.query(query).then((rows: any[]) => {
-    if (format && format !== 'json') {
-      // output data in custom format
-      if (supportedFormats.includes(format)) {
-        if (format === 'gpx') {
-          let responseBody = `<?xml version="1.0" encoding="UTF-8" ?>
-<gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="signalk-to-influxdb2">
-<metadata><author>${context}</author></metadata>
-<trk>`
-          let inSegment = false;
-          rows.forEach((p) => {
-            if (p.lat != null && p.lon != null) {
-              if (!inSegment) {
-                responseBody += '\n<trseg>'
-                inSegment = true
-              }
-              responseBody += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${p.time.toISOString()}</time></trkpt>`
-            } else {
-              if (inSegment) {
-                responseBody += '</trseg>'
-                inSegment = false
-              }
-            }
-          })
-          if (inSegment) responseBody += '</trseg>'
-          responseBody += `
-</trk>
-</gpx>`
-          res.header("Content-Type", "application/xml")
-          res.status(200)
-          res.send(responseBody)
-        }
-      } else {
-        // requested format not supported, return error with list of supported formats
-        res.status(400)
-        res.json({
-          status: '400',
-          detail: 'Format \'' + format + '\' is not supported. Supported formats are: ' + supportedFormats + '.'
-        })
-      }
+    if (format === 'gpx') {
+      outputPositionsGpx(rows, context, res)
+    } else if (format === 'json' || format === undefined) {
+      outputPositionsJson(rows, context, from, to, res)
     } else {
-      // output data as plain json
-      const resultData = rows.map((row) => {
-        return [row.time.toISOString(), [row.lon, row.lat]]
-      })
-      res.json({
-        context,
-        range: {
-          from: from.toString(),
-          to: to.toString(),
-        },
-        values: [{ path: 'navigation.position', method: 'first' }],
-        data: resultData,
-      })
+      // requested format not supported, return error with list of supported formats
+      outputError(res, '400', 'Format \'' + format + '\' is not supported. Supported formats are: ' + supportedFormats + '.')
     }
   })
 }
@@ -397,6 +351,59 @@ function splitPathExpression(pathExpression: string): PathSpec {
   }
 }
 
+function outputPositionsGpx(rows: any[], context: string, res: Response) {
+  let responseBody = `<?xml version="1.0" encoding="UTF-8" ?>
+  <gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="signalk-to-influxdb2">
+  <metadata><author>${context}</author></metadata>
+  <trk>`
+  let inSegment = false;
+  rows.forEach((p) => {
+    if (p.lat != null && p.lon != null) {
+      if (!inSegment) {
+        responseBody += '\n<trseg>'
+        inSegment = true
+      }
+      responseBody += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${p.time.toISOString()}</time></trkpt>`
+    } else {
+      if (inSegment) {
+        responseBody += '</trseg>'
+        inSegment = false
+      }
+    }
+  })
+  if (inSegment) responseBody += '</trseg>'
+  responseBody += `
+  </trk>
+  </gpx>`
+  res.header("Content-Type", "application/xml")
+  res.status(200)
+  res.send(responseBody)
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function outputPositionsJson(rows: any[], context: string, from: ZonedDateTime, to: ZonedDateTime, res: Response) {
+  const resultData = rows.map((row) => {
+    return [row.time.toISOString(), [row.lon, row.lat]]
+  })
+  res.json({
+    context,
+    range: {
+      from: from.toString(),
+      to: to.toString(),
+    },
+    values: [{ path: 'navigation.position', method: 'first' }],
+    data: resultData,
+  })
+}
+
+function outputError(res: Response, status: string, detail: string) {
+  res.status(400)
+  res.json({
+    status: status,
+    detail: detail
+  })
+}
+
 const functionForAggregate: { [key: string]: string } = {
   average: 'mean',
   min: 'min',
@@ -416,7 +423,7 @@ type FromToContextRequest = Request<
   }
 >
 
-const getFromToContext = ({ query }: FromToContextRequest, selfId: string) => {
+const getRequestParams = ({ query }: FromToContextRequest, selfId: string) => {
   try {
     const from = ZonedDateTime.parse(query['from'])
     const to = ZonedDateTime.parse(query['to'])
