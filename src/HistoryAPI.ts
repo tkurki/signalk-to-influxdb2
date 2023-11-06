@@ -124,7 +124,7 @@ function getPositions(
       outputPositionsJson(rows, context, from, to, res)
     } else {
       // requested format not supported, return error with list of supported formats
-      outputError(res, '400', 'Format \'' + format + '\' is not supported. Supported formats are: ' + supportedFormats + '.')
+      outputError(res, 400, 'Format \'' + format + '\' is not supported. Supported formats are: ' + supportedFormats + '.')
     }
   })
 }
@@ -396,10 +396,10 @@ function outputPositionsJson(rows: any[], context: string, from: ZonedDateTime, 
   })
 }
 
-function outputError(res: Response, status: string, detail: string) {
-  res.status(400)
+function outputError(res: Response, status: number, detail: string) {
+  res.status(status)
   res.json({
-    status: status,
+    status: status.toString(),
     detail: detail
   })
 }
