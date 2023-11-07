@@ -5,6 +5,8 @@ import { SKInflux } from './influx'
 import { InfluxDB as InfluxV1 } from 'influx'
 import { FluxResultObserver, FluxTableMetaData } from '@influxdata/influxdb-client'
 
+const supportedFormats: readonly string[] = ['gpx', 'json']
+
 function makeArray(d1: number, d2: number) {
   const arr = []
   for (let i = 0; i < d1; i++) {
@@ -20,12 +22,12 @@ export function registerHistoryApiRoute(
   debug: (k: string) => void,
 ) {
   router.get('/signalk/v1/history/values', (req: Request, res: Response) => {
-    const { from, to, context } = getFromToContext(req as FromToContextRequest, selfId)
-    getValues(influx, context, from, to, debug, req, res)
+    const { from, to, context, format } = getRequestParams(req as FromToContextRequest, selfId)
+    getValues(influx, context, from, to, format, debug, req, res)
   })
   router.get('/signalk/v1/history/contexts', (req: Request, res: Response) => getContexts(influx, res))
   router.get('/signalk/v1/history/paths', (req: Request, res: Response) => {
-    const { from, to } = getFromToContext(req as FromToContextRequest, selfId)
+    const { from, to } = getRequestParams(req as FromToContextRequest, selfId)
     getPaths(influx, from, to, res)
   })
 }
@@ -80,6 +82,7 @@ interface SimpleRequest {
   query: {
     resolution?: string
     paths?: string
+    format?: string
   }
 }
 
@@ -91,9 +94,10 @@ function getPositions(
   context: string,
   from: ZonedDateTime,
   to: ZonedDateTime,
+  format: string,
   timeResolutionMillis: number,
   debug: (s: string) => void,
-  res: SimpleResponse,
+  res: Response,
 ) {
   const query = `
   select
@@ -110,21 +114,18 @@ function getPositions(
 
   debug(query)
 
+  if (format) format = format.toLowerCase()
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   v1Client.query(query).then((rows: any[]) => {
-    const resultData = rows.map((row) => {
-      return [row.time.toISOString(), [row.lon, row.lat]]
-    })
-
-    res.json({
-      context,
-      range: {
-        from: from.toString(),
-        to: to.toString(),
-      },
-      values: [{ path: 'navigation.position', method: 'first' }],
-      data: resultData,
-    })
+    if (format === 'gpx') {
+      outputPositionsGpx(rows, context, res)
+    } else if (format === 'json' || format === undefined) {
+      outputPositionsJson(rows, context, from, to, res)
+    } else {
+      // requested format not supported, return error with list of supported formats
+      outputError(res, 400, 'Format \'' + format + '\' is not supported. Supported formats are: ' + supportedFormats + '.')
+    }
   })
 }
 
@@ -133,9 +134,10 @@ export function getValues(
   context: string,
   from: ZonedDateTime,
   to: ZonedDateTime,
+  format: string,
   debug: (s: string) => void,
   req: SimpleRequest,
-  res: SimpleResponse,
+  res: Response,
 ) {
   const start = Date.now()
   const timeResolutionMillis =
@@ -146,7 +148,7 @@ export function getValues(
   const pathSpecs: PathSpec[] = pathExpressions.map(splitPathExpression)
 
   if (pathSpecs[0].path === 'navigation.position') {
-    getPositions(influx.v1Client, context, from, to, timeResolutionMillis, debug, res)
+    getPositions(influx.v1Client, context, from, to, format, timeResolutionMillis, debug, res)
     return
   }
 
@@ -349,6 +351,59 @@ function splitPathExpression(pathExpression: string): PathSpec {
   }
 }
 
+function outputPositionsGpx(rows: any[], context: string, res: Response) {
+  let responseBody = `<?xml version="1.0" encoding="UTF-8" ?>
+  <gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="signalk-to-influxdb2">
+  <metadata><author>${context}</author></metadata>
+  <trk>`
+  let inSegment = false;
+  rows.forEach((p) => {
+    if (p.lat != null && p.lon != null) {
+      if (!inSegment) {
+        responseBody += '\n<trseg>'
+        inSegment = true
+      }
+      responseBody += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${p.time.toISOString()}</time></trkpt>`
+    } else {
+      if (inSegment) {
+        responseBody += '</trseg>'
+        inSegment = false
+      }
+    }
+  })
+  if (inSegment) responseBody += '</trseg>'
+  responseBody += `
+  </trk>
+  </gpx>`
+  res.header("Content-Type", "application/xml")
+  res.status(200)
+  res.send(responseBody)
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function outputPositionsJson(rows: any[], context: string, from: ZonedDateTime, to: ZonedDateTime, res: Response) {
+  const resultData = rows.map((row) => {
+    return [row.time.toISOString(), [row.lon, row.lat]]
+  })
+  res.json({
+    context,
+    range: {
+      from: from.toString(),
+      to: to.toString(),
+    },
+    values: [{ path: 'navigation.position', method: 'first' }],
+    data: resultData,
+  })
+}
+
+function outputError(res: Response, status: number, detail: string) {
+  res.status(status)
+  res.json({
+    status: status.toString(),
+    detail: detail
+  })
+}
+
 const functionForAggregate: { [key: string]: string } = {
   average: 'mean',
   min: 'min',
@@ -364,14 +419,16 @@ type FromToContextRequest = Request<
     from: string
     to: string
     context: string
+    format: string
   }
 >
 
-const getFromToContext = ({ query }: FromToContextRequest, selfId: string) => {
+const getRequestParams = ({ query }: FromToContextRequest, selfId: string) => {
   try {
     const from = ZonedDateTime.parse(query['from'])
     const to = ZonedDateTime.parse(query['to'])
-    return { from, to, context: getContext(query.context, selfId) }
+    const format = query['format']
+    return { from, to, format, context: getContext(query.context, selfId) }
   } catch (e: unknown) {
     throw new Error(`Error extracting from/to query parameters from ${JSON.stringify(query)}`)
   }
