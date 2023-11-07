@@ -35,8 +35,10 @@ const req = {
     resolution: '60s',
   },
 }
-// const resp = {
-//   status: (n: number) => undefined,
-//   json: (s: any) => console.log(JSON.stringify(s, null, 2)),
-// }
-//getValues(skinflux, context, start, end, format, toConsole, req, resp)
+const resp = {
+  status: (n: number) => undefined,
+  json: (s: any) => console.log(JSON.stringify(s, null, 2)),
+  header: (n: string, v: string) => console.log(`${n}:${v}`),
+  send: (c: string) => console.log(c),
+}
+getValues(skinflux, context, start, end, format, toConsole, req, resp)

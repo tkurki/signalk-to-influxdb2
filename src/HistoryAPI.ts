@@ -76,6 +76,8 @@ interface SimpleResponse {
   status: (s: number) => void
   /* eslint-disable-next-line  @typescript-eslint/no-explicit-any */
   json: (j: any) => void
+  header: (n: string, v: string) => void
+  send: (c: string) => void
 }
 
 interface SimpleRequest {
@@ -97,7 +99,7 @@ function getPositions(
   format: string,
   timeResolutionMillis: number,
   debug: (s: string) => void,
-  res: Response,
+  res: SimpleResponse,
 ) {
   const query = `
   select
@@ -141,7 +143,7 @@ export function getValues(
   format: string,
   debug: (s: string) => void,
   req: SimpleRequest,
-  res: Response,
+  res: SimpleResponse,
 ) {
   const start = Date.now()
   const timeResolutionMillis =
@@ -356,7 +358,7 @@ function splitPathExpression(pathExpression: string): PathSpec {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function outputPositionsGpx(rows: any[], context: string, res: Response) {
+function outputPositionsGpx(rows: any[], context: string, res: SimpleResponse) {
   let responseBody = `<?xml version="1.0" encoding="UTF-8" ?>
   <gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="signalk-to-influxdb2">
   <metadata><author>${context}</author></metadata>
@@ -386,7 +388,13 @@ function outputPositionsGpx(rows: any[], context: string, res: Response) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function outputPositionsJson(rows: any[], context: string, from: ZonedDateTime, to: ZonedDateTime, res: Response) {
+function outputPositionsJson(
+  rows: any[],
+  context: string,
+  from: ZonedDateTime,
+  to: ZonedDateTime,
+  res: SimpleResponse,
+) {
   const resultData = rows.map((row) => {
     return [row.time.toISOString(), [row.lon, row.lat]]
   })
@@ -401,7 +409,7 @@ function outputPositionsJson(rows: any[], context: string, from: ZonedDateTime, 
   })
 }
 
-function outputError(res: Response, status: number, detail: string) {
+function outputError(res: SimpleResponse, status: number, detail: string) {
   res.status(status)
   res.json({
     status: status.toString(),
