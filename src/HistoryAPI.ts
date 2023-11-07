@@ -124,7 +124,11 @@ function getPositions(
       outputPositionsJson(rows, context, from, to, res)
     } else {
       // requested format not supported, return error with list of supported formats
-      outputError(res, 400, 'Format \'' + format + '\' is not supported. Supported formats are: ' + supportedFormats + '.')
+      outputError(
+        res,
+        400,
+        "Format '" + format + "' is not supported. Supported formats are: " + supportedFormats + '.',
+      )
     }
   })
 }
@@ -356,7 +360,7 @@ function outputPositionsGpx(rows: any[], context: string, res: Response) {
   <gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="signalk-to-influxdb2">
   <metadata><author>${context}</author></metadata>
   <trk>`
-  let inSegment = false;
+  let inSegment = false
   rows.forEach((p) => {
     if (p.lat != null && p.lon != null) {
       if (!inSegment) {
@@ -375,7 +379,7 @@ function outputPositionsGpx(rows: any[], context: string, res: Response) {
   responseBody += `
   </trk>
   </gpx>`
-  res.header("Content-Type", "application/xml")
+  res.header('Content-Type', 'application/xml')
   res.status(200)
   res.send(responseBody)
 }
@@ -400,7 +404,7 @@ function outputError(res: Response, status: number, detail: string) {
   res.status(status)
   res.json({
     status: status.toString(),
-    detail: detail
+    detail: detail,
   })
 }
 
