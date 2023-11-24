@@ -103,7 +103,7 @@ function getPositions(
 ) {
   const query = `
   select
-    first(lat) as lat, first(lon) as lon
+    mean(lat) as lat, mean(lon) as lon
   from
     "navigation.position"
   where
@@ -135,6 +135,100 @@ function getPositions(
   })
 }
 
+function getPositionsAndOneOther(
+  v1Client: InfluxV1,
+  context: string,
+  from: ZonedDateTime,
+  to: ZonedDateTime,
+  format: string,
+  timeResolutionMillis: number,
+  debug: (s: string) => void,
+  res: SimpleResponse,
+  otherPath: string
+) {
+  const query1 = `
+  select
+    mean(lat) as lat, mean(lon) as lon
+  from
+    "navigation.position"
+  where
+    "context" = '${context}'
+    and
+    time >= '${from.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z'
+    and
+   time <= '${to.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z'
+  group by time(${timeResolutionMillis}ms)`
+
+  debug(query1)
+
+  const query2 = `
+  select
+    mean(value) as value
+  from
+    "${otherPath}"
+  where
+    "context" = '${context}'
+    and
+    time >= '${from.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z'
+    and
+   time <= '${to.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z'
+  group by time(${timeResolutionMillis}ms)`
+
+  debug(query2)
+
+  if (format) format = format.toLowerCase()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mstart = new Date().getTime()
+  let otherResult: any[] = []
+  let positionsResult: any[] = []
+  v1Client.query(query1).then((rows: any[]) => {
+    debug("InfluxDB query 1 took " + (new Date().getTime() - mstart) + "ms")
+    positionsResult = parsePositionRows(rows)
+    //console.table(positionsResult)
+    const mstart2 = new Date().getTime()
+    v1Client.query(query2).then((rowsq2: any[]) => {
+      debug("InfluxDB query 2 took " + (new Date().getTime() - mstart2) + "ms")
+      otherResult = parseSingleValueRows(rowsq2)
+      //console.table(otherResult)
+
+      // add other value to positions
+      otherResult.forEach(d => positionsResult.find(p => p[0] === d[0]).push(d[1]))
+      //console.table(positionsResult)
+      if (format === 'json' || format === undefined) {
+        positionsResult.pop() // last one is always null
+        outputPosXJson(positionsResult, context, from, to, res, 'navigation.position,' + otherPath)
+      } else {
+        // requested format not supported, return error with list of supported formats
+        outputError(
+          res,
+          400,
+          "Format '" + format + "' is not supported. Supported formats are: " + supportedFormats + '. Use GPX only for navigation.position.',
+        )
+      }
+    })
+  })
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parsePositionRows(rows: any[]): any[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r: any[] = []
+  rows.forEach((row) => {
+      r.push([row.time.toISOString(), [row.lon, row.lat]])
+    })
+  return r;
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseSingleValueRows(rows: any[]): any[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r: any[] = []
+  rows.forEach((row) => {
+      r.push([row.time.toISOString(), row.value])
+    })
+  return r;
+}
+
 export function getValues(
   influx: SKInflux,
   context: string,
@@ -153,8 +247,14 @@ export function getValues(
   const pathExpressions = ((req.query.paths as string) || '').replace(/[^0-9a-z.,:]/gi, '').split(',')
   const pathSpecs: PathSpec[] = pathExpressions.map(splitPathExpression)
 
-  if (pathSpecs[0].path === 'navigation.position') {
+  if (pathExpressions.length == 1 && pathExpressions[0] === 'navigation.position') {
     getPositions(influx.v1Client, context, from, to, format, timeResolutionMillis, debug, res)
+    return
+  }
+
+  if (pathExpressions.length == 2 && (pathExpressions[0] === 'navigation.position' || pathExpressions[1] === 'navigation.position')) {
+    const otherPath = (pathExpressions[0] === 'navigation.position') ? pathExpressions[1] : pathExpressions[0]
+    getPositionsAndOneOther(influx.v1Client, context, from, to, format, timeResolutionMillis, debug, res, otherPath)
     return
   }
 
@@ -404,8 +504,31 @@ function outputPositionsJson(
       from: from.toString(),
       to: to.toString(),
     },
-    values: [{ path: 'navigation.position', method: 'first' }],
-    data: resultData,
+    values: [{ path: 'navigation.position', method: 'mean' }],
+    data: resultData
+  })
+}
+
+function outputPosXJson(
+  rows: any[],
+  context: string,
+  from: ZonedDateTime,
+  to: ZonedDateTime,
+  res: SimpleResponse,
+  paths: string
+) {
+  const dataArray: any[] = []
+  rows.forEach((row) => {
+    dataArray.push([row[0], [row[1][0], row[1][1]], row[2]])
+  })
+  res.json({
+    context,
+    range: {
+      from: from.toString(),
+      to: to.toString(),
+    },
+    values: [{ path: paths.toString(), method: 'mean' }],
+    data: dataArray
   })
 }
 

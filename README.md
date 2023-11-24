@@ -45,7 +45,7 @@ The following request parameters are supported in queries:
 
 * `paths` (mandatory)
 
-  SignalK paths to retrieve, comma-separated. Note that `navigation.position` can not be combined with other paths.
+  SignalK paths to retrieve, comma-separated. Note that `navigation.position` can only be combined with one other path.
   By default the mean value is returned, but a path can be appended with :min or :max to select the minimum or maximum value.
 
 * `resolution` (optional)
@@ -69,6 +69,10 @@ Get wind angle and boat speed:
 Get the track with positions at intervals of 5 minutes in GPX format:
 
 `http://localhost:3000/signalk/v1/history/values?from=2023-11-04T10:00:00Z&to=2023-11-12T18:00:00Z&paths=navigation.position&resolution=300`
+
+Get the track with depth information at intervals of 3 seconds:
+
+`http://localhost:3000/signalk/v1/history/values?from=2023-08-17T07:09:00Z&to=2023-08-17T08:10:00Z&paths=environment.depth.belowTransducer,navigation.position&resolution=3`
 
 ## List available data paths
 
