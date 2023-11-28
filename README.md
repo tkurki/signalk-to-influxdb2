@@ -70,6 +70,10 @@ Get the track with positions at intervals of 5 minutes in GPX format:
 
 `http://localhost:3000/signalk/v1/history/values?from=2023-11-04T10:00:00Z&to=2023-11-12T18:00:00Z&paths=navigation.position&resolution=300`
 
+Get the track with depth information at intervals of 3 seconds:
+
+`http://localhost:3000/signalk/v1/history/values?from=2023-08-17T07:09:00Z&to=2023-08-17T08:10:00Z&paths=environment.depth.belowTransducer,navigation.position&resolution=3`
+
 ## List available data paths
 
 To retrieve a list of available paths, send a request to the `paths` endpoint with from and to timestamps:
