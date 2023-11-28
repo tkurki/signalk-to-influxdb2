@@ -144,7 +144,7 @@ function getPositionsAndOneOther(
   timeResolutionMillis: number,
   debug: (s: string) => void,
   res: SimpleResponse,
-  otherPath: string
+  otherPath: string,
 ) {
   const query1 = `
   select
@@ -183,17 +183,17 @@ function getPositionsAndOneOther(
   let otherResult: any[] = []
   let positionsResult: any[] = []
   v1Client.query(query1).then((rows: any[]) => {
-    debug("InfluxDB query 1 took " + (new Date().getTime() - mstart) + "ms")
+    debug('InfluxDB query 1 took ' + (new Date().getTime() - mstart) + 'ms')
     positionsResult = parsePositionRows(rows)
     //console.table(positionsResult)
     const mstart2 = new Date().getTime()
     v1Client.query(query2).then((rowsq2: any[]) => {
-      debug("InfluxDB query 2 took " + (new Date().getTime() - mstart2) + "ms")
+      debug('InfluxDB query 2 took ' + (new Date().getTime() - mstart2) + 'ms')
       otherResult = parseSingleValueRows(rowsq2)
       //console.table(otherResult)
 
       // add other value to positions
-      otherResult.forEach(d => positionsResult.find(p => p[0] === d[0]).push(d[1]))
+      otherResult.forEach((d) => positionsResult.find((p) => p[0] === d[0]).push(d[1]))
       //console.table(positionsResult)
       if (format === 'json' || format === undefined) {
         positionsResult.pop() // last one is always null
@@ -203,7 +203,11 @@ function getPositionsAndOneOther(
         outputError(
           res,
           400,
-          "Format '" + format + "' is not supported. Supported formats are: " + supportedFormats + '. Use GPX only for navigation.position.',
+          "Format '" +
+            format +
+            "' is not supported. Supported formats are: " +
+            supportedFormats +
+            '. Use GPX only for navigation.position.',
         )
       }
     })
@@ -215,18 +219,18 @@ function parsePositionRows(rows: any[]): any[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const r: any[] = []
   rows.forEach((row) => {
-      r.push([row.time.toISOString(), [row.lon, row.lat]])
-    })
-  return r;
+    r.push([row.time.toISOString(), [row.lon, row.lat]])
+  })
+  return r
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseSingleValueRows(rows: any[]): any[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const r: any[] = []
   rows.forEach((row) => {
-      r.push([row.time.toISOString(), row.value])
-    })
-  return r;
+    r.push([row.time.toISOString(), row.value])
+  })
+  return r
 }
 
 export function getValues(
@@ -252,8 +256,11 @@ export function getValues(
     return
   }
 
-  if (pathExpressions.length == 2 && (pathExpressions[0] === 'navigation.position' || pathExpressions[1] === 'navigation.position')) {
-    const otherPath = (pathExpressions[0] === 'navigation.position') ? pathExpressions[1] : pathExpressions[0]
+  if (
+    pathExpressions.length == 2 &&
+    (pathExpressions[0] === 'navigation.position' || pathExpressions[1] === 'navigation.position')
+  ) {
+    const otherPath = pathExpressions[0] === 'navigation.position' ? pathExpressions[1] : pathExpressions[0]
     getPositionsAndOneOther(influx.v1Client, context, from, to, format, timeResolutionMillis, debug, res, otherPath)
     return
   }
@@ -505,7 +512,7 @@ function outputPositionsJson(
       to: to.toString(),
     },
     values: [{ path: 'navigation.position', method: 'mean' }],
-    data: resultData
+    data: resultData,
   })
 }
 
@@ -515,7 +522,7 @@ function outputPosXJson(
   from: ZonedDateTime,
   to: ZonedDateTime,
   res: SimpleResponse,
-  paths: string
+  paths: string,
 ) {
   const dataArray: any[] = []
   rows.forEach((row) => {
@@ -528,7 +535,7 @@ function outputPosXJson(
       to: to.toString(),
     },
     values: [{ path: paths.toString(), method: 'mean' }],
-    data: dataArray
+    data: dataArray,
   })
 }
 
