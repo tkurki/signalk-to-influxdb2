@@ -4,8 +4,28 @@ import { Request, Response, Router } from 'express'
 import { SKInflux } from './influx'
 import { InfluxDB as InfluxV1 } from 'influx'
 import { FluxResultObserver, FluxTableMetaData } from '@influxdata/influxdb-client'
+import { Brand, Context, Path, Timestamp } from '@signalk/server-api'
 
-const supportedFormats: readonly string[] = ['gpx', 'json']
+type AggregateMethod = Brand<string, 'aggregatemethod'>
+
+type ValueList = {
+  path: Path
+  method: AggregateMethod
+}[]
+
+interface DataResult {
+  values: ValueList
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any
+}
+
+export interface ValuesResponse extends DataResult {
+  context: Context
+  range: {
+    from: Timestamp
+    to: Timestamp
+  }
+}
 
 function makeArray(d1: number, d2: number) {
   const arr = []
@@ -96,11 +116,9 @@ function getPositions(
   context: string,
   from: ZonedDateTime,
   to: ZonedDateTime,
-  format: string,
   timeResolutionMillis: number,
   debug: (s: string) => void,
-  res: SimpleResponse,
-) {
+): Promise<DataResult> {
   const query = `
   select
     first(lat) as lat, first(lon) as lon
@@ -116,28 +134,12 @@ function getPositions(
 
   debug(query)
 
-  if (format) format = format.toLowerCase()
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  v1Client.query(query).then((rows: any[]) => {
-    if (format === 'gpx') {
-      outputPositionsGpx(rows, context, res)
-    } else if (format === 'json' || format === undefined) {
-      outputPositionsJson(rows, context, from, to, res)
-    } else {
-      // requested format not supported, return error with list of supported formats
-      outputError(
-        res,
-        400,
-        "Format '" + format + "' is not supported. Supported formats are: " + supportedFormats + '.',
-      )
-    }
-  })
+  return v1Client.query(query).then(toDataResult)
 }
 
 export function getValues(
   influx: SKInflux,
-  context: string,
+  context: Context,
   from: ZonedDateTime,
   to: ZonedDateTime,
   format: string,
@@ -145,7 +147,6 @@ export function getValues(
   req: SimpleRequest,
   res: SimpleResponse,
 ) {
-  const start = Date.now()
   const timeResolutionMillis =
     (req.query.resolution
       ? Number.parseFloat(req.query.resolution as string)
@@ -153,10 +154,73 @@ export function getValues(
   const pathExpressions = ((req.query.paths as string) || '').replace(/[^0-9a-z.,:]/gi, '').split(',')
   const pathSpecs: PathSpec[] = pathExpressions.map(splitPathExpression)
 
-  if (pathSpecs[0].path === 'navigation.position') {
-    getPositions(influx.v1Client, context, from, to, format, timeResolutionMillis, debug, res)
-    return
-  }
+  const positionPathSpecs = pathSpecs.filter(({ path }) => path === 'navigation.position').slice(0, 1)
+  const positionResult = positionPathSpecs.length
+    ? getPositions(influx.v1Client, context, from, to, timeResolutionMillis, debug)
+    : Promise.resolve({
+        values: [],
+        data: [],
+      })
+
+  const nonPositionPathSpecs = pathSpecs.filter(({ path }) => path !== 'navigation.position')
+  const nonPositionResult: Promise<DataResult> = nonPositionPathSpecs.length
+    ? getNumericValues(influx, context, from, to, timeResolutionMillis, nonPositionPathSpecs, format, debug)
+    : Promise.resolve({
+        values: [],
+        data: [],
+      })
+
+  return Promise.all([positionResult, nonPositionResult]).then(([positionResult, nonPositionResult]) => {
+    if (format === 'gpx' && pathSpecs[0]?.path === 'navigation.position') {
+      outputPositionsGpx(positionResult, context, res)
+    } else {
+      if (
+        positionResult.data.length > 0 &&
+        nonPositionResult.data.length > 0 &&
+        positionResult.data.length !== nonPositionResult.data.length
+      ) {
+        throw new Error('Query result lengths do not match')
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let data: any[] = []
+      let values: ValueList = []
+      if (positionResult.data.length > 0) {
+        data = positionResult.data
+        values = positionResult.values
+        if (nonPositionResult.data.length) {
+          values = values.concat(nonPositionResult.values)
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+          nonPositionResult.data.forEach(([ts, ...numericValues]: any[], i: number) => data[i].push(...numericValues))
+        }
+      } else {
+        data = nonPositionResult.data
+        values = nonPositionResult.values
+      }
+      const result: ValuesResponse = {
+        context,
+        range: {
+          from: from.toString() as Timestamp,
+          to: to.toString() as Timestamp,
+        },
+        values,
+        data,
+      }
+      res.json(result)
+    }
+  })
+}
+
+function getNumericValues(
+  influx: SKInflux,
+  context: Context,
+  from: ZonedDateTime,
+  to: ZonedDateTime,
+  timeResolutionMillis: number,
+  pathSpecs: PathSpec[],
+  format: string,
+  debug: (s: string) => void,
+): Promise<DataResult> {
+  const start = Date.now()
 
   const uniquePaths = pathSpecs.reduce<string[]>((acc, ps) => {
     if (acc.indexOf(ps.path) === -1) {
@@ -185,46 +249,38 @@ export function getValues(
   group by time(${timeResolutionMillis}ms)`
   debug(query)
 
-  influx.v1Client
-    .query(query)
-    .then((result) => {
+  return influx.v1Client.query(query).then((result) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = result as any[]
+    debug(`got ${rows.length} rows in ${Date.now() - start}ms`)
+    const resultLength = rows.length / uniquePaths.length
+    const resultData = makeArray(resultLength, pathSpecs.length + 1)
+
+    for (let j = 0; j < resultLength; j++) {
+      resultData[j][0] = rows[j].time.toISOString()
+    }
+
+    result.groups().forEach((group) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rows = result as any[]
-      debug(`got rows ${Date.now() - start}`)
-      const resultLength = rows.length / uniquePaths.length
-      const resultData = makeArray(resultLength, pathSpecs.length + 1)
-
-      for (let j = 0; j < resultLength; j++) {
-        resultData[j][0] = rows[j].time.toISOString()
-      }
-
-      result.groups().forEach((group) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const groupPathSpecs = pathSpecs.reduce<any[]>((acc, ps, i) => {
-          if (ps.path === group.name) {
-            acc.push([i + 1, ps.aggregateFunction])
-          }
-          return acc
-        }, [])
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        group.rows.forEach((row: any, i) => {
-          groupPathSpecs.forEach(([fieldIndex, fieldName]) => {
-            resultData[i][fieldIndex] = row[fieldName]
-          })
+      const groupPathSpecs = pathSpecs.reduce<any[]>((acc, ps, i) => {
+        if (ps.path === group.name) {
+          acc.push([i + 1, ps.aggregateFunction])
+        }
+        return acc
+      }, [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      group.rows.forEach((row: any, i) => {
+        groupPathSpecs.forEach(([fieldIndex, fieldName]) => {
+          resultData[i][fieldIndex] = row[fieldName]
         })
       })
-      debug(`rows done ${Date.now() - start}`)
-      res.json({
-        context,
-        range: {
-          from: from.toString(),
-          to: to.toString(),
-        },
-        values: pathSpecs.map(({ path, aggregateMethod }: PathSpec) => ({ path, method: aggregateMethod })),
-        data: resultData,
-      })
     })
-    .catch((e) => console.error(e))
+    debug(`rows done ${Date.now() - start}ms`)
+    return {
+      values: pathSpecs.map(({ path, aggregateMethod }: PathSpec) => ({ path, method: aggregateMethod })),
+      data: resultData,
+    }
+  })
 }
 
 export async function getValuesFlux(
@@ -318,8 +374,8 @@ export async function getValuesFlux(
       res.json({
         context,
         range: {
-          from: from.toString(),
-          to: to.toString(),
+          from: from.toString() as Timestamp,
+          to: to.toString() as Timestamp,
         },
         values: pathSpecs.map(({ path, aggregateMethod }: PathSpec) => ({ path, method: aggregateMethod })),
         data: resultData,
@@ -329,28 +385,28 @@ export async function getValuesFlux(
   influx.queryApi.queryRows(query, o)
 }
 
-function getContext(contextFromQuery: string, selfId: string) {
+function getContext(contextFromQuery: string, selfId: string): Context {
   if (!contextFromQuery || contextFromQuery === 'vessels.self' || contextFromQuery === 'self') {
-    return `vessels.${selfId}`
+    return `vessels.${selfId}` as Context
   }
-  return contextFromQuery.replace(/ /gi, '')
+  return contextFromQuery.replace(/ /gi, '') as Context
 }
 
 interface PathSpec {
-  path: string
+  path: Path
   queryResultName: string
-  aggregateMethod: string
+  aggregateMethod: AggregateMethod
   aggregateFunction: string
 }
 
 function splitPathExpression(pathExpression: string): PathSpec {
   const parts = pathExpression.split(':')
-  let aggregateMethod = parts[1] || 'average'
+  let aggregateMethod = (parts[1] || 'average') as AggregateMethod
   if (parts[0] === 'navigation.position') {
-    aggregateMethod = 'first'
+    aggregateMethod = 'first' as AggregateMethod
   }
   return {
-    path: parts[0],
+    path: parts[0] as Path,
     queryResultName: parts[0].replace(/\./g, '_'),
     aggregateMethod,
     aggregateFunction: (functionForAggregate[aggregateMethod] as string) || 'mean()',
@@ -358,13 +414,14 @@ function splitPathExpression(pathExpression: string): PathSpec {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function outputPositionsGpx(rows: any[], context: string, res: SimpleResponse) {
+function outputPositionsGpx(data: DataResult, context: string, res: SimpleResponse) {
   let responseBody = `<?xml version="1.0" encoding="UTF-8" ?>
   <gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="signalk-to-influxdb2">
   <metadata><author>${context}</author></metadata>
   <trk>`
   let inSegment = false
-  rows.forEach((p) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data.data.forEach((p: any) => {
     if (p.lat != null && p.lon != null) {
       if (!inSegment) {
         responseBody += '\n<trseg>'
@@ -387,34 +444,15 @@ function outputPositionsGpx(rows: any[], context: string, res: SimpleResponse) {
   res.send(responseBody)
 }
 
-function outputPositionsJson(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  rows: any[],
-  context: string,
-  from: ZonedDateTime,
-  to: ZonedDateTime,
-  res: SimpleResponse,
-) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toDataResult(rows: any[]): DataResult {
   const resultData = rows.map((row) => {
     return [row.time.toISOString(), [row.lon, row.lat]]
   })
-  res.json({
-    context,
-    range: {
-      from: from.toString(),
-      to: to.toString(),
-    },
-    values: [{ path: 'navigation.position', method: 'first' }],
+  return {
+    values: [{ path: 'navigation.position' as Path, method: 'first' as AggregateMethod }],
     data: resultData,
-  })
-}
-
-function outputError(res: SimpleResponse, status: number, detail: string) {
-  res.status(status)
-  res.json({
-    status: status.toString(),
-    detail: detail,
-  })
+  }
 }
 
 const functionForAggregate: { [key: string]: string } = {
@@ -441,7 +479,8 @@ const getRequestParams = ({ query }: FromToContextRequest, selfId: string) => {
     const from = ZonedDateTime.parse(query['from'])
     const to = ZonedDateTime.parse(query['to'])
     const format = query['format']
-    return { from, to, format, context: getContext(query.context, selfId) }
+    const context: Context = getContext(query.context, selfId)
+    return { from, to, format, context }
   } catch (e: unknown) {
     throw new Error(`Error extracting from/to query parameters from ${JSON.stringify(query)}`)
   }
