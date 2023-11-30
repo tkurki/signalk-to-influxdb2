@@ -1,6 +1,7 @@
 import { ZonedDateTime } from '@js-joda/core'
 import { getValues } from './HistoryAPI'
 import { SKInflux } from './influx'
+import { Context } from '@signalk/server-api'
 
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 /* eslint-disable  @typescript-eslint/no-unused-vars */
@@ -43,4 +44,4 @@ const resp = {
   header: (n: string, v: string) => console.log(`${n}:${v}`),
   send: (c: string) => console.log(c),
 }
-getValues(skinflux, context, start, end, format, toConsole, req, resp)
+getValues(skinflux, context as Context, start, end, format, toConsole, req, resp)

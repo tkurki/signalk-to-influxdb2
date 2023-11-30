@@ -56,6 +56,7 @@ export interface InfluxPlugin {
   getValues: (params: QueryParams) => Promise<Array<unknown>>
   getSelfValues: (params: Omit<QueryParams, 'context'>) => Promise<Array<unknown>>
   flush: () => Promise<unknown>
+  skInfluxes: SKInflux[]
 }
 
 export interface PluginConfig {
@@ -70,7 +71,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
   delete writeOptionsProps.writeSuccess
   const selfContext = 'vessels.' + app.selfId
 
-  let skInfluxes: SKInflux[]
+  const skInfluxes: SKInflux[] = []
   let onStop: (() => void)[] = []
   return {
     start: function (config: PluginConfig) {
@@ -84,7 +85,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
             .join(';'),
         )
       }
-      skInfluxes = config.influxes.map((config: SKInfluxConfig) => new SKInflux(config, app, updatePluginStatus))
+      skInfluxes.push(...config.influxes.map((config: SKInfluxConfig) => new SKInflux(config, app, updatePluginStatus)))
       registerHistoryApiRoute(app, skInfluxes[0], app.selfId, app.debug)
 
       onStop = []
@@ -135,5 +136,6 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
     name: packageInfo.description,
     description: 'Signal K integration with InfluxDb 2',
     schema,
+    skInfluxes,
   }
 }

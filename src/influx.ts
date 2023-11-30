@@ -202,7 +202,6 @@ export class SKInflux {
         },
       })
       this.logging.debug(`Created database retention policy`)
-      console.log('Created database retention policy')
     }
   }
 
@@ -419,6 +418,12 @@ async function ensureBucketExists(influx: InfluxDB, org: string, name: string): 
       const bucket = await bucketsAPI.postBuckets({ body: { orgID, name, retentionRules: [] } })
       // eslint-disable-next-line no-console
       console.log(`Influxdb2: created bucket ${name}`)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const buckets = await bucketsAPI.getBuckets({ orgID, name })
+      if (!buckets.buckets) {
+        throw new Error('Retrieving buckets failed')
+      }
+      return buckets.buckets[0].id
     } else {
       throw e
     }

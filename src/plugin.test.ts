@@ -4,7 +4,9 @@ import InfluxPluginFactory, { App, InfluxPlugin, Plugin } from './plugin'
 import waitOn from 'wait-on'
 import retry from 'async-await-retry'
 import { influxPath } from './influx'
-import { Path } from '@signalk/server-api'
+import { Context, Path, PathValue } from '@signalk/server-api'
+import { ValuesResponse, getValues } from './HistoryAPI'
+import { ZoneId, ZonedDateTime } from '@js-joda/core'
 
 const INFLUX_HOST = process.env['INFLUX_HOST'] || '127.0.0.1'
 
@@ -298,6 +300,71 @@ describe('Plugin', () => {
     )
   })
 
+  it('Can retrieve positions with other data', async () => {
+    const from = ZonedDateTime.now(ZoneId.UTC)
+    const TESTPOSITION = { latitude: 60.1703524, longitude: 24.9589753 }
+    ;[
+      {
+        path: 'navigation.speedThroughWater' as Path,
+        value: 1001,
+      },
+      {
+        path: 'navigation.position' as Path,
+        value: TESTPOSITION,
+      },
+      {
+        path: 'navigation.speedOverGround' as Path,
+        value: 3.14,
+      },
+    ]
+      .map(toDelta)
+      .forEach((d) => app.signalk.emit('delta', d))
+
+    return plugin.flush().then(() =>
+      retry(
+        () =>
+          new Promise<ValuesResponse>((resolve) => {
+            const to = ZonedDateTime.now(ZoneId.UTC)
+            getValues(
+              plugin.skInfluxes[0],
+              TESTCONTEXT as Context,
+              from,
+              to,
+              '',
+              (s) => console.log(s),
+              {
+                query: {
+                  paths: 'navigation.speedThroughWater,navigation.position,navigation.speedOverGround',
+                  resolution: '10',
+                },
+              },
+              {
+                send: () => {
+                  throw new Error('send called')
+                },
+                header: () => {
+                  throw new Error('header called')
+                },
+                status: (s) => console.log(s),
+                json: (r) => resolve(r),
+              },
+            )
+          }).then((result) => {
+            expect(result.values.length).to.equal(3)
+            expect(result.data.length).to.equal(1)
+            expect(result.data[0][1]).to.deep.equal([TESTPOSITION.longitude, TESTPOSITION.latitude])
+            expect(result.data[0][2]).to.deep.equal(1001)
+            expect(result.data[0][3]).to.deep.equal(3.14)
+          }),
+        [null],
+        {
+          retriesMax: 5,
+          interval: 50,
+        },
+      ),
+    )
+  })
+
   const assertNumericAfterFirstOtherValue = (firstValue: string | null) => {
     const NUMERICSCHEMAPATH = 'navigation.headingTrue'
     ;[firstValue, 3.14, null, 'last string value'].forEach((value) =>
@@ -350,6 +417,16 @@ const toNotificationDelta = (path: Path) => ({
           },
         },
       ],
+    },
+  ],
+})
+
+const toDelta = (pathValue: PathValue) => ({
+  context: TESTCONTEXT,
+  updates: [
+    {
+      $source: TESTSOURCE,
+      values: [pathValue],
     },
   ],
 })
