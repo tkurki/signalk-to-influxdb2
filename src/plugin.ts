@@ -18,6 +18,7 @@ import { SKDelta } from '@chacal/signalk-ts'
 import { EventEmitter } from 'stream'
 import { registerHistoryApiRoute } from './HistoryAPI'
 import { IRouter } from 'express'
+import { Context, PathValue, SourceRef } from '@signalk/server-api'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageInfo = require('../package.json')
@@ -71,6 +72,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
   const selfContext = 'vessels.' + app.selfId
 
   let skInfluxes: SKInflux[]
+  let onStop: (() => void)[] = []
   return {
     start: function (config: PluginConfig) {
       const updatePluginStatus = () => {
@@ -85,15 +87,30 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
       }
       skInfluxes = config.influxes.map((config: SKInfluxConfig) => new SKInflux(config, app, updatePluginStatus))
       registerHistoryApiRoute(app, skInfluxes[0], app.selfId, app.debug)
+
+      onStop = []
+      skInfluxes.forEach((skInflux) => {
+        const pruner = setInterval(() => skInflux.pruneLastWrittenTimestamps(), 5 * 60 * 1000)
+        onStop.push(() => clearInterval(pruner))
+      })
+
       return Promise.all(skInfluxes.map((skInflux) => skInflux.init())).then(() =>
         app.signalk.on('delta', (delta: SKDelta) => {
+          const now = Date.now()
           const isSelf = delta.context === selfContext
           delta.updates &&
             delta.updates.forEach((update) => {
               update.values &&
                 update.values.forEach((pathValue) => {
                   skInfluxes.forEach((skInflux) =>
-                    skInflux.handleValue(delta.context, isSelf, update.$source, update.timestamp, pathValue),
+                    skInflux.handleValue(
+                      delta.context as Context,
+                      isSelf,
+                      update.$source as SourceRef,
+                      update.timestamp,
+                      pathValue as PathValue,
+                      now,
+                    ),
                   )
                 })
             })
@@ -102,7 +119,10 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
     },
 
     // eslint-disable-next-line @typescript-eslint/no-empty-function
-    stop: function () {},
+    stop: () => {
+      onStop.forEach((f) => f())
+      onStop = []
+    },
 
     flush: () => Promise.all(skInfluxes.map((ski) => ski.flush())),
 
