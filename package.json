@@ -9,8 +9,8 @@
   "author": "Teppo Kurki <teppo.kurki@iki.fi>",
   "repository": "https://github.com/tkurki/signalk-to-influxdb2",
   "scripts": {
-    "test": "docker-compose run plugintest",
-    "mocha": "mocha --require ts-node/register --extensions ts src/*.test.ts --timeout 5000",
+    "test": "docker compose up -d && npm run build && npm run mocha",
+    "mocha": "mocha --require ts-node/register --extensions ts src/*.test.ts --timeout 5000 --exit",
     "lint:only": "eslint src --ext .ts",
     "prettier": "prettier -w src/",
     "lint": "eslint -c .eslintrc.js --ext .ts --ext .js --fix src/",

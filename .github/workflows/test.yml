@@ -14,4 +14,4 @@ jobs:
       - name: Install & lint
         run: npm install && npm run ci-lint
       - name: Run tests against InfluxDb2
-        run: docker-compose run plugintest
+        run: npm run test
