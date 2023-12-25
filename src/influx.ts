@@ -68,6 +68,13 @@ export interface SKInfluxConfig {
    */
   ignoredSources: string[]
 
+  /**
+   * @title Use timestamps in SK data
+   * @default false
+   * @description Whether the timestamps in SK data should be used instead of time of insertion to InfluxDB
+   */
+  useSKTimestamp: boolean
+
   writeOptions: Partial<WriteOptions>
 }
 
@@ -109,9 +116,10 @@ export class SKInflux {
   } = {}
   private ignoredPaths: string[]
   private ignoredSources: string[]
+  private useSKTimestamp: boolean
 
   constructor(config: SKInfluxConfig, private logging: Logging, triggerStatusUpdate: () => void) {
-    const { org, bucket, url, onlySelf, ignoredPaths, ignoredSources } = config
+    const { org, bucket, url, onlySelf, ignoredPaths, ignoredSources, useSKTimestamp } = config
     this.influx = new InfluxDB(config)
     this.org = org
     this.bucket = bucket
@@ -119,6 +127,7 @@ export class SKInflux {
     this.onlySelf = onlySelf
     this.ignoredPaths = ignoredPaths
     this.ignoredSources = ignoredSources
+    this.useSKTimestamp = useSKTimestamp
     this.writeApi = this.influx.getWriteApi(org, bucket, 'ms', {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       writeFailed: (_error, lines, _attempt, _expires) => {
@@ -186,12 +195,14 @@ export class SKInflux {
     }
   }
 
-  handleValue(context: SKContext, isSelf: boolean, source: string, pathValue: PathValue) {
+  handleValue(context: SKContext, isSelf: boolean, source: string, _timestamp: Date, pathValue: PathValue) {
+    const timestamp = this.useSKTimestamp ? _timestamp : new Date()
     if (this.isIgnored(pathValue.path, source)) {
       return
     }
     if (!this.onlySelf || isSelf) {
-      const point = toPoint(context, isSelf, source, pathValue, this.logging.debug)
+      const point = toPoint(context, isSelf, source, timestamp, pathValue, this.logging.debug)
+      console.log(point)
       if (point) {
         this.writeApi.writePoint(point)
       }
@@ -251,10 +262,11 @@ const toPoint = (
   context: SKContext,
   isSelf: boolean,
   source: string,
+  timestamp: Date,
   pathValue: PathValue,
   debug: (s: string) => void,
 ) => {
-  const point = new Point(influxPath(pathValue.path)).tag('context', context).tag('source', source)
+  const point = new Point(influxPath(pathValue.path)).tag('context', context).tag('source', source).timestamp(timestamp)
   if (isSelf) {
     point.tag(SELF_TAG_NAME, SELF_TAG_VALUE)
   }

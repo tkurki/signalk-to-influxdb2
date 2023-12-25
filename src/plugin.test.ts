@@ -62,6 +62,7 @@ describe('Plugin', () => {
           },
           ignoredPaths: [],
           ignoredSources: [],
+          useSKTimestamp: false,
         },
       ],
     })

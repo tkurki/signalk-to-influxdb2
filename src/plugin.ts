@@ -93,7 +93,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
               update.values &&
                 update.values.forEach((pathValue) => {
                   skInfluxes.forEach((skInflux) =>
-                    skInflux.handleValue(delta.context, isSelf, update.$source, pathValue),
+                    skInflux.handleValue(delta.context, isSelf, update.$source, update.timestamp, pathValue),
                   )
                 })
             })
