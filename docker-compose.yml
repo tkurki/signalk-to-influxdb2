@@ -1,11 +1,5 @@
 version: '2'
 services:
-  plugintest:
-    build: .
-    depends_on: 
-     - influxdb
-    environment:
-      - INFLUX_HOST=influx2
   influxdb:
     container_name: influx2
     image: "influxdb:2.3"
@@ -19,5 +13,4 @@ services:
      - DOCKER_INFLUXDB_INIT_PASSWORD=klangisklangis
      - DOCKER_INFLUXDB_INIT_ORG=signalk_org
      - DOCKER_INFLUXDB_INIT_BUCKET=signalk_bucket
-    #  - DOCKER_INFLUXDB_INIT_RETENTION: The duration the system's initial bucket should retain data. If not set, the initial bucket will retain data forever.
      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=signalk_token
