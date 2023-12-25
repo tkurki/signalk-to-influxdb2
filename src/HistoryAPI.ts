@@ -387,8 +387,8 @@ function outputPositionsGpx(rows: any[], context: string, res: SimpleResponse) {
   res.send(responseBody)
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function outputPositionsJson(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   rows: any[],
   context: string,
   from: ZonedDateTime,
