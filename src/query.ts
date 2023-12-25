@@ -21,6 +21,7 @@ const skinflux = new SKInflux(
     writeOptions: {},
     ignoredPaths: [],
     ignoredSources: [],
+    useSKTimestamp: false,
   },
   logging,
   () => undefined,
