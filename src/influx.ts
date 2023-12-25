@@ -13,8 +13,7 @@
  * limitations under the License.
  */
 
-import { SKContext } from '@chacal/signalk-ts'
-import { Context, Path, PathValue, SourceRef } from '@signalk/server-api'
+import { Context, Path, PathValue, SourceRef, Timestamp } from '@signalk/server-api'
 import { HttpError, InfluxDB, Point, QueryApi, WriteApi, WriteOptions } from '@influxdata/influxdb-client'
 import { BucketsAPI, DbrpsAPI, OrgsAPI } from '@influxdata/influxdb-client-apis'
 import { InfluxDB as InfluxV1 } from 'influx'
@@ -211,11 +210,10 @@ export class SKInflux {
     context: Context,
     isSelf: boolean,
     sourceRef: SourceRef,
-    _timestamp: Date,
+    timestamp: Timestamp | undefined,
     pathValue: PathValue,
     now: number,
   ) {
-    const timestamp = this.useSKTimestamp ? _timestamp : new Date()
     if (this.isIgnored(pathValue.path, sourceRef)) {
       return
     }
@@ -223,7 +221,7 @@ export class SKInflux {
       return
     }
     if (!this.onlySelf || isSelf) {
-      const point = toPoint(context, isSelf, sourceRef, timestamp, pathValue, this.logging.debug)
+      const point = this.toPoint(context, isSelf, sourceRef, timestamp, pathValue, this.logging.debug)
       if (point) {
         this.writeApi.writePoint(point)
         this.updateLastWritten(context, pathValue.path, sourceRef, now)
@@ -272,7 +270,6 @@ export class SKInflux {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getSelfValues(params: Omit<QueryParams, 'context'>): Promise<Array<any>> {
     const query = paramsToQuery(this.bucket, params)
-    // console.log(query)
     return this.queryApi.collectRows(query)
   }
 
@@ -308,59 +305,62 @@ export class SKInflux {
       return false
     }
   }
-}
 
-const toPoint = (
-  context: SKContext,
-  isSelf: boolean,
-  source: string,
-  timestamp: Date,
-  pathValue: PathValue,
-  debug: (s: string) => void,
-) => {
-  const point = new Point(influxPath(pathValue.path)).tag('context', context).tag('source', source).timestamp(timestamp)
-  if (isSelf) {
-    point.tag(SELF_TAG_NAME, SELF_TAG_VALUE)
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const value = pathValue.value as any
-  if (
-    pathValue.path === 'navigation.position' &&
-    typeof value === 'object' &&
-    value !== null &&
-    value.latitude !== null &&
-    value.longitude !== null &&
-    !isNaN(value.latitude) &&
-    !isNaN(value.longitude)
+  toPoint(
+    context: Context,
+    isSelf: boolean,
+    source: string,
+    timestamp: Timestamp | undefined,
+    pathValue: PathValue,
+    debug: (s: string) => void,
   ) {
-    point.floatField('lat', value.latitude)
-    point.floatField('lon', value.longitude)
-    point.tag('s2_cell_id', posToS2CellId(value))
-  } else {
-    const valueType = typeFor(pathValue)
-    if (value === null) {
-      return
+    const point = new Point(influxPath(pathValue.path)).tag('context', context).tag('source', source)
+    if (this.useSKTimestamp) {
+      point.timestamp(timestamp !== undefined ? new Date(timestamp) : new Date())
     }
-    try {
-      switch (valueType) {
-        case JsValueType.number:
-          point.floatField('value', value)
-          break
-        case JsValueType.string:
-          point.stringField('value', value)
-          break
-        case JsValueType.boolean:
-          point.booleanField('value', value)
-          break
-        case JsValueType.object:
-          point.stringField('value', JSON.stringify(value))
+    if (isSelf) {
+      point.tag(SELF_TAG_NAME, SELF_TAG_VALUE)
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const value = pathValue.value as any
+    if (
+      pathValue.path === 'navigation.position' &&
+      typeof value === 'object' &&
+      value !== null &&
+      value.latitude !== null &&
+      value.longitude !== null &&
+      !isNaN(value.latitude) &&
+      !isNaN(value.longitude)
+    ) {
+      point.floatField('lat', value.latitude)
+      point.floatField('lon', value.longitude)
+      point.tag('s2_cell_id', posToS2CellId(value))
+    } else {
+      const valueType = typeFor(pathValue)
+      if (value === null) {
+        return
       }
-    } catch (e) {
-      debug(`Error creating point ${pathValue.path}:${pathValue.value} => ${valueType}`)
-      return undefined
+      try {
+        switch (valueType) {
+          case JsValueType.number:
+            point.floatField('value', value)
+            break
+          case JsValueType.string:
+            point.stringField('value', value)
+            break
+          case JsValueType.boolean:
+            point.booleanField('value', value)
+            break
+          case JsValueType.object:
+            point.stringField('value', JSON.stringify(value))
+        }
+      } catch (e) {
+        debug(`Error creating point ${pathValue.path}:${pathValue.value} => ${valueType}`)
+        return undefined
+      }
     }
+    return point
   }
-  return point
 }
 
 const typeFor = (pathValue: PathValue): JsValueType => {
@@ -385,7 +385,7 @@ const paramsToQuery = (bucket: string, params: PartialBy<QueryParams, 'context'>
     : `and r.${SELF_TAG_NAME} == "${SELF_TAG_VALUE}"`
   return `
   from(bucket: "${bucket}")
-    |> range(start: -1y)
+    |> range(start: -10y)
     |> filter(fn: (r) => r["_measurement"] == "${params.paths[0]}" ${contextTagClause})
   `
 }

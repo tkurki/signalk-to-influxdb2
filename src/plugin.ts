@@ -14,11 +14,10 @@
  */
 
 import { SKInflux, SKInfluxConfig } from './influx'
-import { SKDelta } from '@chacal/signalk-ts'
 import { EventEmitter } from 'stream'
 import { registerHistoryApiRoute } from './HistoryAPI'
 import { IRouter } from 'express'
-import { Context, PathValue, SourceRef } from '@signalk/server-api'
+import { Context, Delta, PathValue, SourceRef, ValuesDelta } from '@signalk/server-api'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageInfo = require('../package.json')

@@ -213,6 +213,68 @@ describe('Plugin', () => {
   it('Uses data types from schema, , initial string value', async () =>
     assertNumericAfterFirstOtherValue('first string value'))
 
+  it('Uses delta timestamp by configuration', async () => {
+    plugin.stop()
+    plugin = InfluxPluginFactory(app)
+    await plugin.start({
+      influxes: [
+        {
+          url: `http://${INFLUX_HOST}:8086`,
+          token: 'signalk_token',
+          org: 'signalk_org',
+          bucket,
+          onlySelf: false,
+          writeOptions: {
+            batchSize: 1,
+            flushInterval: 10,
+            maxRetries: 1,
+          },
+          ignoredPaths: [],
+          ignoredSources: [],
+          useSKTimestamp: true, // <===============
+          resolution: 0,
+        },
+      ],
+    })
+    const FIXED_TIMESTAMP = '2023-08-17T17:01:00Z'
+    app.signalk.emit('delta', {
+      context: TESTCONTEXT,
+      updates: [
+        {
+          $source: TESTSOURCE,
+          timestamp: new Date(FIXED_TIMESTAMP),
+          values: [
+            {
+              path: TESTPATHNUMERIC,
+              value: 222,
+            },
+          ],
+        },
+      ],
+    })
+
+    return retry(
+      () =>
+        plugin.flush().then(() =>
+          plugin
+            .getSelfValues({
+              paths: [TESTPATHNUMERIC],
+              influxIndex: 0,
+            })
+            .then((rows) => {
+              expect(rows.length).to.equal(1)
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              expect((rows as any)[0]._time).to.equal(FIXED_TIMESTAMP)
+            }),
+        ),
+      [null],
+      {
+        retriesMax: 5,
+        interval: 50,
+      },
+    )
+  })
+
   const assertNumericAfterFirstOtherValue = (firstValue: string | null) => {
     const NUMERICSCHEMAPATH = 'navigation.headingTrue'
     ;[firstValue, 3.14, null, 'last string value'].forEach((value) =>
