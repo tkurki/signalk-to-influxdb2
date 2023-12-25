@@ -94,8 +94,9 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
         onStop.push(() => clearInterval(pruner))
       })
 
-      return Promise.all(skInfluxes.map((skInflux) => skInflux.init())).then(() =>
-        app.signalk.on('delta', (delta: SKDelta) => {
+      return Promise.all(skInfluxes.map((skInflux) => skInflux.init())).then(() => {
+        const onDelta = (_delta: Delta) => {
+          const delta = _delta as ValuesDelta
           const now = Date.now()
           const isSelf = delta.context === selfContext
           delta.updates &&
@@ -114,8 +115,10 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
                   )
                 })
             })
-        }),
-      )
+        }
+        app.signalk.on('delta', onDelta)
+        onStop.push(() => app.signalk.removeListener('delta', onDelta))
+      })
     },
 
     // eslint-disable-next-line @typescript-eslint/no-empty-function
