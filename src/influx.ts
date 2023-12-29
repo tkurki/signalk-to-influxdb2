@@ -372,6 +372,9 @@ const typeFor = (pathValue: PathValue): JsValueType => {
 }
 
 const _typeFor = (pathValue: PathValue): JsValueType => {
+  if (pathValue.path.startsWith('notifications.')) {
+    return JsValueType.object
+  }
   const unit = getUnits(`vessels.self.${pathValue.path}`)
   if (unit && unit !== 'RFC 3339 (UTC)') {
     return JsValueType.number

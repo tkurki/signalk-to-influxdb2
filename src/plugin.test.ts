@@ -4,6 +4,7 @@ import InfluxPluginFactory, { App, InfluxPlugin, Plugin } from './plugin'
 import waitOn from 'wait-on'
 import retry from 'async-await-retry'
 import { influxPath } from './influx'
+import { Path } from '@signalk/server-api'
 
 const INFLUX_HOST = process.env['INFLUX_HOST'] || '127.0.0.1'
 
@@ -11,11 +12,11 @@ const TESTSOURCE = 'test$source'
 const TESTPATHNUMERIC = 'test.path.numeric'
 const TESTNUMERICVALUE = 3.14
 const TESTPATHBOOLEAN = 'test.path.boolean'
+const selfId = 'urn:mrn:signalk:uuid:c0d79334-4e25-4245-8892-54e8ccc85elf'
+const TESTCONTEXT = `vessels.${selfId}`
+const MMSICONTEXT = 'vessels.urn:mrn:imo:mmsi:200000000'
 
 describe('Plugin', () => {
-  const selfId = 'urn:mrn:signalk:uuid:c0d79334-4e25-4245-8892-54e8ccc85elf'
-  const TESTCONTEXT = `vessels.${selfId}`
-  const MMSICONTEXT = 'vessels.urn:mrn:imo:mmsi:200000000'
   const app: App = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
     debug: function (...args: any): void {
@@ -213,6 +214,28 @@ describe('Plugin', () => {
   it('Uses data types from schema, , initial string value', async () =>
     assertNumericAfterFirstOtherValue('first string value'))
 
+  it('Forces object as value type for notifications', async () => {
+    const notificationPaths = [
+      'notifications.environment.inside.humidity' as Path,
+      'notifications.environment.inside.temperature' as Path,
+    ]
+    notificationPaths.map(toNotificationDelta).forEach((d) => app.signalk.emit('delta', d))
+    return plugin.flush().then(() =>
+      retry(() =>
+        Promise.all(
+          notificationPaths.map((path) =>
+            plugin
+              .getSelfValues({
+                paths: [path],
+                influxIndex: 0,
+              })
+              .then((rows) => expect(rows.length).to.equal(1)),
+          ),
+        ),
+      ),
+    )
+  })
+
   it('Uses delta timestamp by configuration', async () => {
     plugin.stop()
     plugin = InfluxPluginFactory(app)
@@ -309,4 +332,24 @@ describe('Plugin', () => {
       interval: 50,
     })
   }
+})
+
+const toNotificationDelta = (path: Path) => ({
+  context: TESTCONTEXT,
+  updates: [
+    {
+      $source: TESTSOURCE,
+      values: [
+        {
+          path,
+          value: {
+            state: 'normal',
+            message: 'vlag',
+            method: ['visual', 'sound'],
+            timestamp: '2023-12-28T10:36:21.348Z',
+          },
+        },
+      ],
+    },
+  ],
 })
