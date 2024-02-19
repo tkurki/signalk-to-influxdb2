@@ -28,8 +28,9 @@ export const SELF_TAG_VALUE = 'true'
 export interface SKInfluxConfig {
   /**
    * Url of the InfluxDb 2 server
-   *
+   * @default http://127.0.0.1:8086
    * @title Url
+   * @description InfluxDB server address in http://hostname:port format
    */
   url: string
   /**
@@ -50,7 +51,7 @@ export interface SKInfluxConfig {
   /**
    * @title Store only self data
    * @default true
-   * @description Store data only for "self" data, not for example AIS targets' data
+   * @description Store data only for "self" vessel, not for example AIS targets' data
    */
   onlySelf: boolean
 
@@ -69,7 +70,7 @@ export interface SKInfluxConfig {
   ignoredSources: string[]
 
   /**
-   * @title Use timestamps in SK data
+   * @title Use timestamps from SK data
    * @default false
    * @description Whether the timestamps in SK data should be used instead of time of insertion to InfluxDB
    */
