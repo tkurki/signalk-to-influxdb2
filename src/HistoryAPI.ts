@@ -170,44 +170,49 @@ export function getValues(
         data: [],
       })
 
-  return Promise.all([positionResult, nonPositionResult]).then(([positionResult, nonPositionResult]) => {
-    if (format === 'gpx' && pathSpecs[0]?.path === 'navigation.position') {
-      outputPositionsGpx(positionResult, context, res)
-    } else {
-      if (
-        positionResult.data.length > 0 &&
-        nonPositionResult.data.length > 0 &&
-        positionResult.data.length !== nonPositionResult.data.length
-      ) {
-        throw new Error('Query result lengths do not match')
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let data: any[] = []
-      let values: ValueList = []
-      if (positionResult.data.length > 0) {
-        data = positionResult.data
-        values = positionResult.values
-        if (nonPositionResult.data.length) {
-          values = values.concat(nonPositionResult.values)
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
-          nonPositionResult.data.forEach(([ts, ...numericValues]: any[], i: number) => data[i].push(...numericValues))
-        }
+  return Promise.all([positionResult, nonPositionResult])
+    .then(([positionResult, nonPositionResult]) => {
+      if (format === 'gpx' && pathSpecs[0]?.path === 'navigation.position') {
+        outputPositionsGpx(positionResult, context, res)
       } else {
-        data = nonPositionResult.data
-        values = nonPositionResult.values
+        if (
+          positionResult.data.length > 0 &&
+          nonPositionResult.data.length > 0 &&
+          positionResult.data.length !== nonPositionResult.data.length
+        ) {
+          throw new Error('Query result lengths do not match')
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let data: any[] = []
+        let values: ValueList = []
+        if (positionResult.data.length > 0) {
+          data = positionResult.data
+          values = positionResult.values
+          if (nonPositionResult.data.length) {
+            values = values.concat(nonPositionResult.values)
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+            nonPositionResult.data.forEach(([ts, ...numericValues]: any[], i: number) => data[i].push(...numericValues))
+          }
+        } else {
+          data = nonPositionResult.data
+          values = nonPositionResult.values
+        }
+        const result: ValuesResponse = {
+          context,
+          range: {
+            from: from.toString() as Timestamp,
+            to: to.toString() as Timestamp,
+          },
+          values,
+          data,
+        }
+        res.json(result)
       }
-      const result: ValuesResponse = {
-        context,
-        range: {
-          from: from.toString() as Timestamp,
-          to: to.toString() as Timestamp,
-        },
-        values,
-        data,
-      }
-      res.json(result)
-    }
-  })
+    })
+    .catch((reason) => {
+      res.status(500)
+      res.json({ error: reason.toString() })
+    })
 }
 
 function getNumericValues(

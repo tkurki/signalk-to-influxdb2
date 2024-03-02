@@ -49,6 +49,7 @@
     "@influxdata/influxdb-client-apis": "^1.29.0",
     "@js-joda/core": "^5.3.0",
     "@js-joda/timezone": "^2.12.1",
+    "@signalk/freeboard-sk": "^2.4.0",
     "@signalk/signalk-schema": "^1.6.0",
     "influx": "^5.9.3",
     "s2-geometry": "^1.2.10"
