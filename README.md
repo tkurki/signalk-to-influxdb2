@@ -15,7 +15,7 @@ Main features:
 
 See [backlog](https://github.com/users/tkurki/projects/1/views/1) for planned features and [Releases](https://github.com/tkurki/signalk-to-influxdb2/releases) for published features.
 
-Discussion in [Signal K Slack](https://signalk-dev.slack.com/) ([get invited](http://slack-invite.signalk.org/)).
+For discussions and support visit the [Signal K Website](https://signalk.org/).
 
 ### Details
 
