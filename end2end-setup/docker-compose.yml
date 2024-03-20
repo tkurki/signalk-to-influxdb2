@@ -1,0 +1,30 @@
+version: '2'
+services:
+  influxdb:
+    container_name: influx2
+    image: influxdb:2.3
+    ports:
+     - 8086:8086
+    volumes:
+     - ./influx-data:/var/lib/influxdb2
+     - ./influx-config:/etc/influxdb2
+    environment:
+     - DOCKER_INFLUXDB_INIT_MODE=setup
+     - DOCKER_INFLUXDB_INIT_USERNAME=signalk
+     - DOCKER_INFLUXDB_INIT_PASSWORD=klangisklangis
+     - DOCKER_INFLUXDB_INIT_ORG=signalk_org
+     - DOCKER_INFLUXDB_INIT_BUCKET=signalk_bucket
+    #  - DOCKER_INFLUXDB_INIT_RETENTION: The duration the system's initial bucket should retain data. If not set, the initial bucket will retain data forever.
+     - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=signalk_token
+  signalk-server:
+    image: signalk/signalk-server:v1.45.0
+    entrypoint:
+    - /home/node/signalk/bin/signalk-server
+    - --sample-n2k-data
+    - --override-timestamps
+    environment:
+    - DEBUG=signalk:interfaces:plugins
+    ports:
+     - 3002:3000
+    volumes:
+     - ./dotsignalk:/home/node/.signalk
