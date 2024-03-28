@@ -141,6 +141,7 @@ export class SKInflux {
     this.useSKTimestamp = useSKTimestamp
     this.resolution = resolution
     this.writeApi = this.influx.getWriteApi(org, bucket, 'ms', {
+      ...config.writeOptions,
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       writeFailed: (_error, lines, _attempt, _expires) => {
         this.failedLinesCount += lines.length
