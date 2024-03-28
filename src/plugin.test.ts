@@ -326,7 +326,7 @@ describe('Plugin', () => {
           new Promise<ValuesResponse>((resolve) => {
             const to = ZonedDateTime.now(ZoneId.UTC)
             getValues(
-              plugin.skInfluxes[0],
+              plugin.skInfluxes()[0],
               TESTCONTEXT as Context,
               from,
               to,
