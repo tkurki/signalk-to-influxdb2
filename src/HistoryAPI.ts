@@ -425,14 +425,15 @@ function outputPositionsGpx(data: DataResult, context: string, res: SimpleRespon
   <metadata><author>${context}</author></metadata>
   <trk>`
   let inSegment = false
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data.data.forEach((p: any) => {
-    if (p.lat != null && p.lon != null) {
+  data.data.forEach((p: [Timestamp, [number, number]]) => {
+    const [time, position] = p
+    const [lon, lat] = position
+    if (lat !== null && lon !== null) {
       if (!inSegment) {
         responseBody += '\n<trseg>'
         inSegment = true
       }
-      responseBody += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${p.time.toISOString()}</time></trkpt>`
+      responseBody += `<trkpt lat="${lat}" lon="${lon}"><time>${time}</time></trkpt>`
     } else {
       if (inSegment) {
         responseBody += '</trseg>'
