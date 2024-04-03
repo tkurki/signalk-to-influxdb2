@@ -45,7 +45,7 @@ The following request parameters are supported in queries:
 
 * `paths` (mandatory)
 
-  SignalK paths to retrieve, comma-separated. Note that `navigation.position` can not be combined with other paths.
+  SignalK paths to retrieve, comma-separated.
   By default the mean value is returned, but a path can be appended with :min or :max to select the minimum or maximum value.
 
 * `resolution` (optional)
