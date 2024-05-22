@@ -21,6 +21,64 @@ For discussions and support visit the [Signal K Website](https://signalk.org/).
 
 - data for Signal K "self" vessel is tagged with tag `self` with value `t`
 
+# Plugin and InfluxDB Setup
+
+To configure the plugin, you need to have have already installed InfluxDB 2 and created a new bucket and an access token.
+You can use the operator API token or, if you're security-conscious, create a new token with more restrictive permissions.
+
+Install the plugin using the Signal K Appstore. Remember to restart Signal K to apply the changes.
+
+Go to plugin configuration: Server -> Plugin Config, then scroll down to "Signal K to InfluxDb 2" and expand the section.
+
+The plugin can connect to multiple InfluxDB instances. We will only configure one:
+
+- Add a new Influx instance by clicking the plus sign
+- Url: http://127.0.0.1:8086
+- Set the token to the one you created earlier
+- Organization: (same as in the InfluxDB config)
+- Bucket: (same as in the InfluxDB config)
+
+If you're mostly interested in your own boat data, select "Store only self data".
+Leaving that unchecked may result in a lot of data being stored, especially if you are in a busy area.
+
+Set the other configuration options as to your liking. Brief guidance:
+
+- Ignored paths and sources are important for limiting the amount of data. However, don't set them until you have verified data is being stored in the DB.
+- "Use timestamps from SK data": Usually you want to use the original timestamps, but rewriting the timestamps may result in more efficient DB operations.
+- "Resolution": typically the maximum data frequency on boat networks is 10 Hz. If you set a value of 100 ms or less, you will capture all data, at the cost of a lot of used disk space. A value of 1000 ms is reasonable for real-time observations, and 5000 ms or even 10&nbsp;000 ms for history logging purposes.
+- "Flush interval" dictates how often data is written to the disk. Use the same value as in "Resolution" as the initial setting.
+- Remaining settings can be safely skipped.
+
+Remember to click "Submit" to save your configuration!
+
+## Configuring the Grafana Data Source
+
+While technically not in the scope of this plugin, this section describes how to set up an InfluxDB data source in Grafana. (Another option would be to use the experimental [signalk-grafana data](https://github.com/tkurki/signalk-grafana) data source.)
+
+Login to Grafana. On Signal K installations, Grafana often runs on port 3001: http://mysignalkhostname:3001/
+
+Create the data source:
+
+- Click on "Add your first data source"
+  - Data source type: Influxdb
+  - Name: influxdb
+  - Query language: InfluxQL
+  - HTTP URL: http://localhost:8086
+
+To authenticate, you need to add a custom HTTP header:
+
+- Header: Authorization
+- Value: Token (token you created when configuring InfluxDB)
+
+Use the following settings:
+
+- Database: (your bucket name)
+- HTTP Method: GET
+- Min time interval: 1s
+
+Then click "Save & test".
+After a short while, you should get a positive acknowledgment. Now, you can create dashboard panels that use InfluxDB as the data source.
+
 # History API
 
 The plugin implements the Signal K History API, allowing retrieval of historical data with HTTP GET requests.
