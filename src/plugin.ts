@@ -15,9 +15,9 @@
 
 import { SKInflux, SKInfluxConfig } from './influx'
 import { EventEmitter } from 'stream'
-import { registerHistoryApiRoute } from './HistoryAPI'
+import { getDailyLogData, registerHistoryApiRoute } from './HistoryAPI'
 import { IRouter } from 'express'
-import { Context, Delta, PathValue, SourceRef, ValuesDelta } from '@signalk/server-api'
+import { Context, Delta, MetaDelta, Path, PathValue, SourceRef, ValuesDelta } from '@signalk/server-api'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageInfo = require('../package.json')
@@ -29,6 +29,7 @@ export interface Logging {
   error: (...args: any) => void
 }
 export interface App extends Logging, Pick<IRouter, 'get'> {
+  handleMessage(id: string, delta: Delta): void
   signalk: EventEmitter
   selfId: string
   setPluginStatus: (msg: string) => void
@@ -60,6 +61,12 @@ export interface InfluxPlugin {
 }
 
 export interface PluginConfig {
+  /**
+   * @title Output Daily Distance Log values
+   * @description Calculate periodically daily distance from navigation.position values since 00:00 local time and output under navigation.trip.daily
+   * @default false
+   */
+  outputDailyLog: boolean
   influxes: SKInfluxConfig[]
 }
 
@@ -93,6 +100,44 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
         const pruner = setInterval(() => skInflux.pruneLastWrittenTimestamps(), 5 * 60 * 1000)
         onStop.push(() => clearInterval(pruner))
       })
+
+      if (config.outputDailyLog) {
+        app.handleMessage('', {
+          updates: [
+            {
+              meta: [
+                {
+                  path: 'navigation.trip.daily.log',
+                  value: {
+                    units: 'm'
+                  }
+                }
+              ]
+            }
+          ]
+        } as unknown as MetaDelta)
+        let previousLength = 0
+        const get = () => {
+          app.debug('getDailyLogData')
+          getDailyLogData(skInfluxes[0], app.selfId, app.debug).then(({ length }) => {
+            app.debug(length)
+            if (length !== previousLength) {
+              previousLength = length
+              app.handleMessage('', {
+                updates: [{
+                  values: [{
+                    path: 'navigation.trip.daily.log' as Path,
+                    value: length
+                  }]
+                }]
+              })
+            }
+          })
+        }
+        const interval = setInterval(get, 5 * 60 * 1000)
+        get()
+        onStop.push(() => clearInterval(interval))
+      }
 
       return Promise.all(skInfluxes.map((skInflux) => skInflux.init())).then(() => {
         const onDelta = (_delta: Delta) => {

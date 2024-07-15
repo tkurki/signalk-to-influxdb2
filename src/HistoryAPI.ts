@@ -1,10 +1,11 @@
-import { DateTimeFormatter, ZonedDateTime } from '@js-joda/core'
+import { DateTimeFormatter, LocalDate, ZoneId, ZonedDateTime } from '@js-joda/core'
 
 import { Request, Response, Router } from 'express'
 import { SKInflux } from './influx'
 import { InfluxDB as InfluxV1 } from 'influx'
 import { FluxResultObserver, FluxTableMetaData } from '@influxdata/influxdb-client'
 import { Brand, Context, Path, Timestamp } from '@signalk/server-api'
+import { start } from 'repl'
 
 type AggregateMethod = Brand<string, 'aggregatemethod'>
 
@@ -158,17 +159,17 @@ export function getValues(
   const positionResult = positionPathSpecs.length
     ? getPositions(influx.v1Client, context, from, to, timeResolutionMillis, debug)
     : Promise.resolve({
-        values: [],
-        data: [],
-      })
+      values: [],
+      data: [],
+    })
 
   const nonPositionPathSpecs = pathSpecs.filter(({ path }) => path !== 'navigation.position')
   const nonPositionResult: Promise<DataResult> = nonPositionPathSpecs.length
     ? getNumericValues(influx, context, from, to, timeResolutionMillis, nonPositionPathSpecs, format, debug)
     : Promise.resolve({
-        values: [],
-        data: [],
-      })
+      values: [],
+      data: [],
+    })
 
   return Promise.all([positionResult, nonPositionResult])
     .then(([positionResult, nonPositionResult]) => {
@@ -490,4 +491,67 @@ const getRequestParams = ({ query }: FromToContextRequest, selfId: string) => {
   } catch (e: unknown) {
     throw new Error(`Error extracting from/to query parameters from ${JSON.stringify(query)}`)
   }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getDailyLogData(influx: SKInflux, selfId: string, debug:(...args: any) => void) {
+  return new Promise<{length: number}>((resolve) => {
+    const startOfToday = LocalDate.now().atStartOfDay().atZone(ZoneId.of('UTC'))
+    getValues(influx, `vessels.${selfId}` as Context, startOfToday, ZonedDateTime.now(), '', debug, {
+      query: { paths: 'navigation.position', resolution: `${60}` }
+    }, {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
+      status: function (s: number): void {
+      },
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+      json: (result: any) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const validData = result.data.filter((d: any) => Array.isArray(d) && d[1][0] !== null && d[1][1] !== null)
+        resolve(trackStats(validData))
+      },
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      header: function (n: string, v: string): void {
+        throw new Error('Function not implemented.')
+      },
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      send: function (c: string): void {
+        throw new Error('Function not implemented.')
+      }
+    }
+    )
+  })
+}
+
+const R = 6371 * 1000; // Earth's radius in meters
+
+function haversineDistance([lon1, lat1]: number[], [lon2, lat2]: number[]) {
+  const dLat = lat2 - lat1;
+  const dLon = lon2 - lon1;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1) * Math.cos(lat2) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+  return 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function trackStats(track: any[][]) {
+  if (track.length === 0) {
+    return {
+      length: 0
+    }
+  }
+  let previousPoint = [toRadians(track[0][1][0]), toRadians(track[0][1][1])]
+  return {
+    length: track.slice(1).reduce((acc, trackPoint) => {
+      const thisPoint = [toRadians(trackPoint[1][0]), toRadians(trackPoint[1][1])]
+      acc += haversineDistance(previousPoint, thisPoint)
+      previousPoint = thisPoint
+      return acc
+    }, 0) * R
+  }
+}
+
+function toRadians(degrees: number) {
+  return degrees * Math.PI / 180;
 }
