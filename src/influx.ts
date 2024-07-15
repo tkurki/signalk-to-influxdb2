@@ -364,6 +364,7 @@ export class SKInflux {
   }
 }
 
+
 const typeFor = (pathValue: PathValue): JsValueType => {
   let r = VALUETYPECACHE[pathValue.path]
   if (!r) {

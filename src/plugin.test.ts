@@ -69,6 +69,7 @@ describe('Plugin', () => {
           resolution: 0,
         },
       ],
+      outputDailyLog: false
     })
   })
 
@@ -260,6 +261,7 @@ describe('Plugin', () => {
           resolution: 0,
         },
       ],
+      outputDailyLog: false
     })
     const FIXED_TIMESTAMP = '2023-08-17T17:01:00Z'
     app.signalk.emit('delta', {
