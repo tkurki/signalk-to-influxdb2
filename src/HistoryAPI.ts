@@ -5,7 +5,6 @@ import { SKInflux } from './influx'
 import { InfluxDB as InfluxV1 } from 'influx'
 import { FluxResultObserver, FluxTableMetaData } from '@influxdata/influxdb-client'
 import { Brand, Context, Path, Timestamp } from '@signalk/server-api'
-import { start } from 'repl'
 
 type AggregateMethod = Brand<string, 'aggregatemethod'>
 
