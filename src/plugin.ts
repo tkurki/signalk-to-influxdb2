@@ -109,12 +109,12 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
                 {
                   path: 'navigation.trip.daily.log',
                   value: {
-                    units: 'm'
-                  }
-                }
-              ]
-            }
-          ]
+                    units: 'm',
+                  },
+                },
+              ],
+            },
+          ],
         } as unknown as MetaDelta)
         let previousLength = 0
         const get = () => {
@@ -124,12 +124,16 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
             if (length !== previousLength) {
               previousLength = length
               app.handleMessage('', {
-                updates: [{
-                  values: [{
-                    path: 'navigation.trip.daily.log' as Path,
-                    value: length
-                  }]
-                }]
+                updates: [
+                  {
+                    values: [
+                      {
+                        path: 'navigation.trip.daily.log' as Path,
+                        value: length,
+                      },
+                    ],
+                  },
+                ],
               })
             }
           })
