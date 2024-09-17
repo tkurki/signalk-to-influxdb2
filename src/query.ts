@@ -20,6 +20,7 @@ const skinflux = new SKInflux(
     bucket: process.env.BUCKET || '!!!',
     org: process.env.ORG || '!!!',
     writeOptions: {},
+    filteringRules: [],
     ignoredPaths: [],
     ignoredSources: [],
     useSKTimestamp: false,
