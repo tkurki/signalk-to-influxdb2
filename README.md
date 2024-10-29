@@ -72,7 +72,7 @@ Create the data source:
   
 Use the following settings:
 
-- Database: Your bucket name from influxDB)
+- Database: Your bucket name from influxDB
 - User: Your username from influxDB
 - Password: The token you created in influxDB
 - HTTP Method: GET
