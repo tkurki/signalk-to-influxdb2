@@ -2,7 +2,7 @@ version: '2'
 services:
   influxdb:
     container_name: influx2
-    image: "influxdb:2.3"
+    image: "influxdb:2.7.10"
     ports:
      - "8086:8086"
     volumes:
