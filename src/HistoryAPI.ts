@@ -111,7 +111,7 @@ interface SimpleRequest {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ValuesResultRow = any[]
 
-function getPositions(
+export function getPositions(
   v1Client: InfluxV1,
   context: string,
   from: ZonedDateTime,

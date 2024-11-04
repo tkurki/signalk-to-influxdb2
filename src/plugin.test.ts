@@ -63,6 +63,7 @@ describe('Plugin', () => {
             flushInterval: 10,
             maxRetries: 1,
           },
+          filteringRules: [],
           ignoredPaths: [],
           ignoredSources: [],
           useSKTimestamp: false,
@@ -255,6 +256,7 @@ describe('Plugin', () => {
             flushInterval: 10,
             maxRetries: 1,
           },
+          filteringRules: [],
           ignoredPaths: [],
           ignoredSources: [],
           useSKTimestamp: true, // <===============

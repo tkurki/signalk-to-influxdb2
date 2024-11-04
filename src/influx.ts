@@ -25,6 +25,25 @@ import { S2 } from 's2-geometry'
 export const SELF_TAG_NAME = 'self'
 export const SELF_TAG_VALUE = 'true'
 
+interface FilteringRule {
+  /**
+   * @title Allow rule
+   * @description Check to use this rule for picking data for writing, otherwise this rule will cause data to be ignored.
+   */
+  allow: boolean
+  /**
+   * @title Path
+   * @description Literal value or JS regular expression.
+   */
+  path: string
+
+  /**
+   * @title Source
+   * @description Literal value or JS regular expression. You can copypaste values from server's Data Browser
+   */
+  source: string
+}
+
 export interface SKInfluxConfig {
   /**
    * Url of the InfluxDb 2 server
@@ -54,6 +73,13 @@ export interface SKInfluxConfig {
    * @description Store data only for "self" vessel, not for example AIS targets' data
    */
   onlySelf: boolean
+
+  /**
+   * @title Filtering Rules
+   * @default []
+   * @description Filtering rules for allowing and/or ignoring data for writing. First matching rule decides whether to allow writing or ignore and not write the value. If there are rules but none of them match the value will be written. Adding rules disables ignoredPaths and ignoredValues. To pick some values add allow rules for them and an "ignore all" rule at the end with .* in either path or source field. Activate Debug logging in plugin configuration to get logging on server startup about ignored and allowed data.
+   */
+  filteringRules: FilteringRule[]
 
   /**
    * @title Ignored paths
@@ -116,6 +142,7 @@ export class SKInflux {
   private ignoreStatusForPathSources: {
     [path: string]: boolean
   } = {}
+  private filteringRules: FilteringRule[]
   private ignoredPaths: string[]
   private ignoredSources: string[]
   private useSKTimestamp: boolean
@@ -130,7 +157,8 @@ export class SKInflux {
   private resolution: number
 
   constructor(config: SKInfluxConfig, private logging: Logging, triggerStatusUpdate: () => void) {
-    const { org, bucket, url, onlySelf, ignoredPaths, ignoredSources, resolution, useSKTimestamp } = config
+    const { org, bucket, url, onlySelf, ignoredPaths, ignoredSources, resolution, useSKTimestamp, filteringRules } =
+      config
     this.influx = new InfluxDB(config)
     this.org = org
     this.bucket = bucket
@@ -138,6 +166,7 @@ export class SKInflux {
     this.onlySelf = onlySelf
     this.ignoredPaths = ignoredPaths
     this.ignoredSources = ignoredSources
+    this.filteringRules = filteringRules || []
     this.useSKTimestamp = useSKTimestamp
     this.resolution = resolution
     this.writeApi = this.influx.getWriteApi(org, bucket, 'ms', {
@@ -284,6 +313,31 @@ export class SKInflux {
   }
 
   ignoreStatusByConfig(path: string, sourceRef: string): boolean {
+    if (this.filteringRules?.length > 0) {
+      return this.ignoreStatusByRule(path, sourceRef)
+    } else {
+      return this.ignoreStatusByIgnoredPathOrSource(path, sourceRef)
+    }
+  }
+
+  ignoreStatusByRule(path: string, sourceRef: string): boolean {
+    const firstMatchingRule = this.filteringRules.find((rule) => {
+      return (
+        (rule.path === undefined || rule.path.length === 0 || new RegExp(rule.path).test(path)) &&
+        (rule.source === undefined || rule.source.length === 0 || new RegExp(rule.source).test(sourceRef))
+      )
+    })
+    //ignore if there is a matching rule AND the rule is not an allow rule
+    const isIgnored = firstMatchingRule !== undefined && !firstMatchingRule.allow
+    this.logging.debug(
+      `${path} from ${sourceRef} will be ${isIgnored ? 'ignored' : 'written'}, matching rule is ${JSON.stringify(
+        firstMatchingRule,
+      )}`,
+    )
+    return isIgnored
+  }
+
+  ignoreStatusByIgnoredPathOrSource(path: string, sourceRef: string): boolean {
     try {
       const ignoredByPath =
         this.ignoredPaths?.reduce<boolean>((acc, ignoredPathExp) => {
