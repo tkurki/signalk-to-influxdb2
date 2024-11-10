@@ -1,7 +1,7 @@
 {
   "name": "signalk-to-influxdb2",
   "version": "1.8.0",
-  "description": "SIgnal K to InfluxDb 2",
+  "description": "Signal K to InfluxDb 2",
   "main": "index.js",
   "keywords": [
     "signalk-node-server-plugin"
