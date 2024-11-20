@@ -64,10 +64,10 @@ Login to Grafana. On Signal K installations, Grafana often runs on port 3001: ht
 Create the data source:
 
 - Click on "Add your first data source"
-  - Data source type: Influxdb
-  - Name: influxdb
-  - Query language: InfluxQL
-  - HTTP URL: http://localhost:8086
+  - Data source type: `Influxdb`
+  - Name: `influxdb`
+  - Query language: `InfluxQL`
+  - HTTP URL: `http://localhost:8086`
 
 Use the following InfluxDB Details:
 
@@ -141,5 +141,5 @@ To retrieve a list of available contexts, send a request to the `contexts` endpo
 
 `http://localhost:3000/signalk/v1/history/contexts?from=2023-11-04T00:00:00Z&to=2029-11-25T23:59:59Z`
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbNTE1NTMwNTBdfQ==
+eyJoaXN0b3J5IjpbLTQ3NjE2ODA2Nl19
 -->
