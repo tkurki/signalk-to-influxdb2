@@ -140,3 +140,6 @@ To retrieve a list of available paths, send a request to the `paths` endpoint wi
 To retrieve a list of available contexts, send a request to the `contexts` endpoint with from and to timestamps:
 
 `http://localhost:3000/signalk/v1/history/contexts?from=2023-11-04T00:00:00Z&to=2029-11-25T23:59:59Z`
+<!--stackedit_data:
+eyJoaXN0b3J5IjpbNTE1NTMwNTBdfQ==
+-->
