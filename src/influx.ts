@@ -201,17 +201,28 @@ export class SKInflux {
     })
   }
 
-  async init() {
-    const bucketId = await ensureBucketExists(this.influx, this.org, this.bucket)
-    try {
-      await this.ensureV1MappingExists(bucketId)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      this.logging.error('Could not verify or create v1 database mapping, history api will not work')
-      this.logging.error(err)
-    }
+  init() {
+    let retryCount = 0
+    return new Promise((resolve) => {
+      const retryInit = () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        this._init(resolve).catch((e: any) => {
+          this.logging.debug(e.message)
+          this.logging.debug(`${e.message} retry ${retryCount++}`)
+          setTimeout(() => {
+            retryInit()
+          }, 10 * 1000)
+        })
+      }
+      retryInit()
+    })
   }
 
+  async _init(onSuccess: (v: unknown) => void) {
+    const bucketId = await ensureBucketExists(this.influx, this.org, this.bucket)
+    await this.ensureV1MappingExists(bucketId)
+    onSuccess(undefined)
+  }
   async ensureV1MappingExists(bucketId: string | undefined) {
     if (!bucketId) {
       throw new Error('No bucketid')
