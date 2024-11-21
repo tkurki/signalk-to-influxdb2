@@ -143,7 +143,9 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
         onStop.push(() => clearInterval(interval))
       }
 
+      app.setPluginStatus(`Connecting ${skInfluxes.map((sk) => sk.url)}`)
       return Promise.all(skInfluxes.map((skInflux) => skInflux.init())).then(() => {
+        app.setPluginStatus('Connected')
         const onDelta = (_delta: Delta) => {
           const delta = _delta as ValuesDelta
           const now = Date.now()
