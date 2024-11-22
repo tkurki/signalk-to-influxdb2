@@ -17,7 +17,7 @@ import { SKInflux, SKInfluxConfig } from './influx'
 import { EventEmitter } from 'stream'
 import { getDailyLogData, registerHistoryApiRoute } from './HistoryAPI'
 import { IRouter } from 'express'
-import { Context, Delta, MetaDelta, Path, PathValue, SourceRef, ValuesDelta } from '@signalk/server-api'
+import { Context, Delta, hasValues, MetaDelta, Path, PathValue, SourceRef, ValuesDelta } from '@signalk/server-api'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageInfo = require('../package.json')
@@ -152,7 +152,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
           const isSelf = delta.context === selfContext
           delta.updates &&
             delta.updates.forEach((update) => {
-              update.values &&
+              hasValues(update) &&
                 update.values.forEach((pathValue) => {
                   skInfluxes.forEach((skInflux) =>
                     skInflux.handleValue(
