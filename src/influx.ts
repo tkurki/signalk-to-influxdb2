@@ -389,15 +389,7 @@ export class SKInflux {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const value = pathValue.value as any
-    if (
-      pathValue.path === 'navigation.position' &&
-      typeof value === 'object' &&
-      value !== null &&
-      value.latitude !== null &&
-      value.longitude !== null &&
-      !isNaN(value.latitude) &&
-      !isNaN(value.longitude)
-    ) {
+    if (isValidPosition(pathValue)) {
       point.floatField('lat', value.latitude)
       point.floatField('lon', value.longitude)
       point.tag('s2_cell_id', posToS2CellId(value))
@@ -462,6 +454,20 @@ const paramsToQuery = (bucket: string, params: PartialBy<QueryParams, 'context'>
 const posToS2CellId = (position: { latitude: number; longitude: number }) => {
   const cell = S2.S2Cell.FromLatLng({ lat: position.latitude, lng: position.longitude }, 10)
   return S2.keyToId(cell.toHilbertQuadkey())
+}
+
+function isValidPosition({ path, value }: PathValue): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const _value = value as any
+  return (
+    path === 'navigation.position' &&
+    typeof value === 'object' &&
+    value !== null &&
+    _value.latitude !== null &&
+    _value.longitude !== null &&
+    !isNaN(_value.latitude) &&
+    !isNaN(_value.longitude)
+  )
 }
 
 async function ensureBucketExists(influx: InfluxDB, org: string, name: string): Promise<string | undefined> {
