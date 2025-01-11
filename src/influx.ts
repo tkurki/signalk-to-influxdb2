@@ -262,11 +262,10 @@ export class SKInflux {
       return
     }
     if (!this.onlySelf || isSelf) {
-      const point = this.toPoint(context, isSelf, sourceRef, timestamp, pathValue, this.logging.debug)
-      if (point) {
+      this.toPoints(context, isSelf, sourceRef, timestamp, pathValue, this.logging.debug).forEach((point) => {
         this.writeApi.writePoint(point)
         this.updateLastWritten(context, pathValue.path, sourceRef, now)
-      }
+      })
     }
   }
   updateLastWritten(context: Context, path: Path, sourceRef: SourceRef, now: number) {
@@ -372,14 +371,14 @@ export class SKInflux {
     }
   }
 
-  toPoint(
+  toPoints(
     context: Context,
     isSelf: boolean,
     source: string,
     timestamp: Timestamp | undefined,
     pathValue: PathValue,
     debug: (s: string) => void,
-  ) {
+  ): Point[] {
     const point = new Point(influxPath(pathValue.path)).tag('context', context).tag('source', source)
     if (this.useSKTimestamp) {
       point.timestamp(timestamp !== undefined ? new Date(timestamp) : new Date())
@@ -393,10 +392,17 @@ export class SKInflux {
       point.floatField('lat', value.latitude)
       point.floatField('lon', value.longitude)
       point.tag('s2_cell_id', posToS2CellId(value))
+    } else if (pathValue.path === 'navigation.attitude') {
+      return ['pitch', 'roll', 'yaw'].reduce<Point[]>((acc, field) => {
+        const point = new Point(influxPath(pathValue.path)).tag('context', context).tag('source', source)
+        point.floatField('value', value[field])
+        acc.push()
+        return acc
+      }, [])
     } else {
       const valueType = typeFor(pathValue)
       if (value === null) {
-        return
+        return []
       }
       try {
         switch (valueType) {
@@ -414,10 +420,10 @@ export class SKInflux {
         }
       } catch (e) {
         debug(`Error creating point ${pathValue.path}:${pathValue.value} => ${valueType}`)
-        return undefined
+        return []
       }
     }
-    return point
+    return [point]
   }
 }
 
