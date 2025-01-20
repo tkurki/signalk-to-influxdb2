@@ -394,7 +394,9 @@ export class SKInflux {
       point.tag('s2_cell_id', posToS2CellId(value))
     } else if (pathValue.path === 'navigation.attitude') {
       return ['pitch', 'roll', 'yaw'].reduce<Point[]>((acc, field) => {
-        const point = new Point(influxPath(`navigation.attitude.${field}`)).tag('context', context).tag('source', source)
+        const point = new Point(influxPath(`navigation.attitude.${field}`))
+          .tag('context', context)
+          .tag('source', source)
         point.floatField('value', value[field])
         acc.push(point)
         return acc
