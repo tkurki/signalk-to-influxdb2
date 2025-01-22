@@ -394,11 +394,13 @@ export class SKInflux {
       point.tag('s2_cell_id', posToS2CellId(value))
     } else if (pathValue.path === 'navigation.attitude') {
       return ['pitch', 'roll', 'yaw'].reduce<Point[]>((acc, field) => {
-        const point = new Point(influxPath(`navigation.attitude.${field}`))
-          .tag('context', context)
-          .tag('source', source)
-        point.floatField('value', value[field])
-        acc.push(point)
+        if (isValidFloat(value[field])) {
+          const point = new Point(influxPath(`navigation.attitude.${field}`))
+            .tag('context', context)
+            .tag('source', source)
+          point.floatField('value', value[field])
+          acc.push(point)
+        }
         return acc
       }, [])
     } else {
@@ -476,6 +478,10 @@ function isValidPosition({ path, value }: PathValue): boolean {
     !isNaN(_value.latitude) &&
     !isNaN(_value.longitude)
   )
+}
+
+function isValidFloat(value: unknown): boolean {
+  return typeof value === 'number' && !isNaN(value)
 }
 
 async function ensureBucketExists(influx: InfluxDB, org: string, name: string): Promise<string | undefined> {
