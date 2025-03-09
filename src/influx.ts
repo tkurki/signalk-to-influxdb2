@@ -20,7 +20,9 @@ import { InfluxDB as InfluxV1 } from 'influx'
 import { getUnits } from '@signalk/signalk-schema'
 
 import { Logging, QueryParams } from './plugin'
-import { S2 } from 's2-geometry'
+import { s2 } from 's2js'
+const LatLng = s2.LatLng
+const toToken = s2.cellid.toToken
 
 export const SELF_TAG_NAME = 'self'
 export const SELF_TAG_VALUE = 'true'
@@ -462,8 +464,7 @@ const paramsToQuery = (bucket: string, params: PartialBy<QueryParams, 'context'>
 }
 
 const posToS2CellId = (position: { latitude: number; longitude: number }) => {
-  const cell = S2.S2Cell.FromLatLng({ lat: position.latitude, lng: position.longitude }, 10)
-  return S2.keyToId(cell.toHilbertQuadkey())
+  return toToken(s2.Cell.fromLatLng(LatLng.fromDegrees(position.latitude, position.longitude)).id)
 }
 
 function isValidPosition({ path, value }: PathValue): boolean {

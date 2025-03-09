@@ -50,6 +50,9 @@ export function registerHistoryApiRoute(
     const { from, to } = getRequestParams(req as FromToContextRequest, selfId)
     getPaths(influx, from, to, res)
   })
+  router.get('/signalk/v1/history/track', (req: Request, res: Response) => {
+    getTrack(influx, res)
+  })
 }
 
 async function getContexts(influx: SKInflux, res: Response) {
@@ -137,6 +140,51 @@ export function getPositions(
   return v1Client.query(query).then(toDataResult)
 }
 
+export function getTrack(influx: SKInflux, res: SimpleResponse) {
+  /*
+  
+  import "experimental/geo"
+  
+  from(bucket: "signalk_bucket")
+    |> range(start: -1h)
+    |> filter(fn: (r) => r._measurement == "navigation.position")
+    |> aggregateWindow(every: 60s, fn: first)
+    |> filter(fn: (r) => exists r._value)
+    |> geo.toRows()
+    |> geo.filterRows(region: { lat: 59.70, lon: 24.72, radius: 2000.0 })
+  
+  
+  */
+
+  const region = { lat: 59.70, lon: 24.72, radius: 2000.0 }
+  const threshold = 10
+  const query = `
+  import "experimental/geo"
+  from(bucket: "signalk_bucket")
+  |> filter(fn: (r) => r._measurement == "navigation.position")
+  |> geo.toRows()
+  |> geo.filterRows(region: { lat: 59.70, lon: 24.72, radius: 2000.0 })
+  |> sort(columns: ["_time"])
+  |> yield()
+  `
+  influx.queryApi.queryRows(query, {
+    next: (row: string[], tableMeta: FluxTableMetaData) => {
+      console.log(row)
+      const result = tableMeta.get(row, 'result')
+      const value = tableMeta.get(row, '_value')
+      console.log(result, value)
+      return true
+    },
+    error: function (error: Error): void {
+      console.error(error)
+    },
+    complete: function (): void {
+      res.json({ message: 'done' })
+    }
+  })
+
+}
+
 export function getValues(
   influx: SKInflux,
   context: Context,
@@ -158,17 +206,17 @@ export function getValues(
   const positionResult = positionPathSpecs.length
     ? getPositions(influx.v1Client, context, from, to, timeResolutionMillis, debug)
     : Promise.resolve({
-        values: [],
-        data: [],
-      })
+      values: [],
+      data: [],
+    })
 
   const nonPositionPathSpecs = pathSpecs.filter(({ path }) => path !== 'navigation.position')
   const nonPositionResult: Promise<DataResult> = nonPositionPathSpecs.length
     ? getNumericValues(influx, context, from, to, timeResolutionMillis, nonPositionPathSpecs, format, debug)
     : Promise.resolve({
-        values: [],
-        data: [],
-      })
+      values: [],
+      data: [],
+    })
 
   return Promise.all([positionResult, nonPositionResult])
     .then(([positionResult, nonPositionResult]) => {
@@ -508,7 +556,7 @@ export function getDailyLogData(influx: SKInflux, selfId: string, debug: (...arg
       },
       {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
-        status: function (s: number): void {},
+        status: function (s: number): void { },
         // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
         json: (result: any) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
