@@ -430,18 +430,18 @@ function outputPositionsGpx(data: DataResult, context: string, res: SimpleRespon
     const [lon, lat] = position
     if (lat !== null && lon !== null) {
       if (!inSegment) {
-        responseBody += '\n<trseg>'
+        responseBody += '\n<trkseg>'
         inSegment = true
       }
       responseBody += `<trkpt lat="${lat}" lon="${lon}"><time>${time}</time></trkpt>`
     } else {
       if (inSegment) {
-        responseBody += '</trseg>'
+        responseBody += '</trkseg>'
         inSegment = false
       }
     }
   })
-  if (inSegment) responseBody += '</trseg>'
+  if (inSegment) responseBody += '</trkseg>'
   responseBody += `
   </trk>
   </gpx>`
