@@ -4,7 +4,7 @@ import InfluxPluginFactory, { App, InfluxPlugin, Plugin } from './plugin'
 import waitOn from 'wait-on'
 import retry from 'async-await-retry'
 import { influxPath } from './influx'
-import { Context, Path, PathValue } from '@signalk/server-api'
+import { Context, Path, PathValue, ServerAPI } from '@signalk/server-api'
 import { ValuesResponse, getValues } from './HistoryAPI'
 import { ZoneId, ZonedDateTime } from '@js-joda/core'
 
@@ -19,24 +19,20 @@ const TESTCONTEXT = `vessels.${selfId}`
 const MMSICONTEXT = 'vessels.urn:mrn:imo:mmsi:200000000'
 
 describe('Plugin', () => {
-  const app: App = {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+  const app = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     debug: function (...args: any): void {
-      // eslint-disable-next-line no-console
       console.log(`debug:${args}`)
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     error: function (...args: any): void {
-      // eslint-disable-next-line no-console
-      console.error(`debug:${args}`)
+      console.error(`error:${args}`)
     },
     signalk: new EventEmitter(),
     selfId,
     setPluginStatus: (s: string) => console.log(s),
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
     get: () => undefined,
-  }
+  } as unknown as App & ServerAPI
 
   before(async () => {
     await waitOn({

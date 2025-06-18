@@ -17,7 +17,17 @@ import { SKInflux, SKInfluxConfig } from './influx'
 import { EventEmitter } from 'stream'
 import { getDailyLogData, registerHistoryApiRoute } from './HistoryAPI'
 import { IRouter } from 'express'
-import { Context, Delta, hasValues, MetaDelta, Path, PathValue, SourceRef, ValuesDelta } from '@signalk/server-api'
+import {
+  Context,
+  Delta,
+  hasValues,
+  Path,
+  PathValue,
+  Position,
+  ServerAPI,
+  SourceRef,
+} from '@signalk/server-api'
+import { SqliteTrackDb } from './SqliteTrackDb'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageInfo = require('../package.json')
@@ -70,7 +80,7 @@ export interface PluginConfig {
   influxes: SKInfluxConfig[]
 }
 
-export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
+export default function InfluxPluginFactory(app: App & ServerAPI): Plugin & InfluxPlugin {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const schema = require('../dist/PluginConfig.json')
   const writeOptionsProps = schema.properties.influxes.items.properties.writeOptions.properties
@@ -95,7 +105,17 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
       skInfluxes = config.influxes.map((config: SKInfluxConfig) => new SKInflux(config, app, updatePluginStatus))
       registerHistoryApiRoute(app, skInfluxes[0], app.selfId, app.debug)
 
-      onStop = []
+      const trackDb = new SqliteTrackDb(app.selfId, app.getDataDirPath())
+      const unsubscribe = app.streambundle
+        .getSelfStream('navigation.position' as Path)
+        .debounceImmediate(60 * 1000)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .onValue((position: any) => {
+          const _position = position as Position
+          trackDb.newPosition(selfContext as Context, [_position.latitude, _position.longitude])
+        })
+
+      onStop = [unsubscribe, () => trackDb.close()]
       skInfluxes.forEach((skInflux) => {
         const pruner = setInterval(() => skInflux.pruneLastWrittenTimestamps(), 5 * 60 * 1000)
         onStop.push(() => clearInterval(pruner))
@@ -107,7 +127,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
             {
               meta: [
                 {
-                  path: 'navigation.trip.daily.log',
+                  path: 'navigation.trip.daily.log' as Path,
                   value: {
                     units: 'm',
                   },
@@ -115,7 +135,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
               ],
             },
           ],
-        } as unknown as MetaDelta)
+        })
         let previousLength = 0
         const get = () => {
           app.debug('getDailyLogData')
@@ -146,8 +166,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
       app.setPluginStatus(`Connecting ${skInfluxes.map((sk) => sk.url)}`)
       return Promise.all(skInfluxes.map((skInflux) => skInflux.init())).then(() => {
         app.setPluginStatus('Connected')
-        const onDelta = (_delta: Delta) => {
-          const delta = _delta as ValuesDelta
+        const onDelta = (delta: Delta) => {
           const now = Date.now()
           const isSelf = delta.context === selfContext
           delta.updates &&
