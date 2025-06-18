@@ -13,10 +13,13 @@ type ValueList = {
   method: AggregateMethod
 }[]
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type Datarow = [Timestamp, ...any[]]
+
 interface DataResult {
   values: ValueList
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any
+  data: Datarow[]
 }
 
 export interface ValuesResponse extends DataResult {
@@ -283,7 +286,7 @@ function getNumericValues(
     debug(`rows done ${Date.now() - start}ms`)
     return {
       values: pathSpecs.map(({ path, aggregateMethod }: PathSpec) => ({ path, method: aggregateMethod })),
-      data: resultData,
+      data: resultData as Datarow[],
     }
   })
 }
@@ -425,7 +428,8 @@ function outputPositionsGpx(data: DataResult, context: string, res: SimpleRespon
   <metadata><author>${context}</author></metadata>
   <trk>`
   let inSegment = false
-  data.data.forEach((p: [Timestamp, [number, number]]) => {
+  data.data.forEach((dr) => {
+    const p = dr as [Timestamp, [number, number]]
     const [time, position] = p
     const [lon, lat] = position
     if (lat !== null && lon !== null) {
@@ -452,7 +456,7 @@ function outputPositionsGpx(data: DataResult, context: string, res: SimpleRespon
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toDataResult(rows: any[]): DataResult {
-  const resultData = rows.map((row) => {
+  const resultData = rows.map<Datarow>((row) => {
     return [row.time.toISOString(), [row.lon, row.lat]]
   })
   return {

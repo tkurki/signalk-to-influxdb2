@@ -8,9 +8,6 @@
     "strict": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "typeRoots": [
-      "./src",
-      "./node_modules/@types"
-    ]
+    "typeRoots": ["./src", "./node_modules/@types"]
   }
 }
