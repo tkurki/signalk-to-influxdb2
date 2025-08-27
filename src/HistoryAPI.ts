@@ -120,6 +120,7 @@ export function getPositions(
   from: ZonedDateTime,
   to: ZonedDateTime,
   timeResolutionMillis: number,
+  needsCollation: boolean,
   debug: (s: string) => void,
 ): Promise<DataResult> {
   const query = `
@@ -133,7 +134,7 @@ export function getPositions(
     time >= '${from.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z'
     and
    time <= '${to.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z'
-  group by time(${timeResolutionMillis}ms)`
+  group by time(${timeResolutionMillis}ms)${!needsCollation ? ' fill(none)' : ''}`
 
   debug(query)
 
@@ -158,16 +159,28 @@ export function getValues(
   const pathSpecs: PathSpec[] = pathExpressions.map(splitPathExpression)
 
   const positionPathSpecs = pathSpecs.filter(({ path }) => path === 'navigation.position').slice(0, 1)
+  const nonPositionPathSpecs = pathSpecs.filter(({ path }) => path !== 'navigation.position')
+  const needsCollation = nonPositionPathSpecs.length > 0 && positionPathSpecs.length > 0
+
   const positionResult = positionPathSpecs.length
-    ? getPositions(influx.v1Client, context, from, to, timeResolutionMillis, debug)
+    ? getPositions(influx.v1Client, context, from, to, timeResolutionMillis, needsCollation, debug)
     : Promise.resolve({
         values: [],
         data: [],
       })
 
-  const nonPositionPathSpecs = pathSpecs.filter(({ path }) => path !== 'navigation.position')
   const nonPositionResult: Promise<DataResult> = nonPositionPathSpecs.length
-    ? getNumericValues(influx, context, from, to, timeResolutionMillis, nonPositionPathSpecs, format, debug)
+    ? getNumericValues(
+        influx,
+        context,
+        from,
+        to,
+        timeResolutionMillis,
+        nonPositionPathSpecs,
+        needsCollation,
+        format,
+        debug,
+      )
     : Promise.resolve({
         values: [],
         data: [],
@@ -194,10 +207,22 @@ export function getValues(
           if (nonPositionResult.data.length) {
             values = values.concat(nonPositionResult.values)
             // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
-            nonPositionResult.data.forEach(([ts, ...numericValues]: any[], i: number) => data[i].push(...numericValues))
+            nonPositionResult.data.forEach(([ts, ...numericValues]: any[], i: number) => {
+              let hasNonNulls = data[i][1][0] !== null //first coordinate of position is not null
+              numericValues.forEach((value) => (hasNonNulls = hasNonNulls || value !== null))
+              if (hasNonNulls) {
+                data[i].push(...numericValues)
+              }
+            })
+            //filter out rows with all null values
+            data = data.filter((row) => row.length !== pathSpecs.length)
+          } else {
+            //only positions, check that first coordinate is not null
+            data = data.filter((row) => row[1][0] !== null)
           }
         } else {
-          data = nonPositionResult.data
+          //filter out rows with all null values
+          data = nonPositionResult.data.filter((row) => row.slice(1).some((value) => value !== null))
           values = nonPositionResult.values
         }
         const result: ValuesResponse = {
@@ -225,6 +250,7 @@ function getNumericValues(
   to: ZonedDateTime,
   timeResolutionMillis: number,
   pathSpecs: PathSpec[],
+  needsCollation: boolean,
   format: string,
   debug: (s: string) => void,
 ): Promise<DataResult> {
@@ -254,7 +280,7 @@ function getNumericValues(
     time >= '${from.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z'
     and
    time <= '${to.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z'
-  group by time(${timeResolutionMillis}ms)`
+  group by time(${timeResolutionMillis}ms)${!needsCollation ? ' fill(none)' : ''}`
   debug(query)
 
   return influx.v1Client.query(query).then((result) => {
