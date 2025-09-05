@@ -4,31 +4,10 @@ import { Request, Response, Router } from 'express'
 import { SKInflux } from './influx'
 import { InfluxDB as InfluxV1 } from 'influx'
 import { FluxResultObserver, FluxTableMetaData } from '@influxdata/influxdb-client'
-import { Brand, Context, Path, Timestamp } from '@signalk/server-api'
+import { Context, Path, Timestamp } from '@signalk/server-api'
+import { AggregateMethod, DataRow, ValueList, ValuesResponse } from '@signalk/server-api/history'
 
-type AggregateMethod = Brand<string, 'aggregatemethod'>
-
-type ValueList = {
-  path: Path
-  method: AggregateMethod
-}[]
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type Datarow = [Timestamp, ...any[]]
-
-interface DataResult {
-  values: ValueList
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: Datarow[]
-}
-
-export interface ValuesResponse extends DataResult {
-  context: Context
-  range: {
-    from: Timestamp
-    to: Timestamp
-  }
-}
+export type DataResult = Omit<ValuesResponse, 'context' | 'range'>
 
 function makeArray(d1: number, d2: number) {
   const arr = []
@@ -312,7 +291,7 @@ function getNumericValues(
     debug(`rows done ${Date.now() - start}ms`)
     return {
       values: pathSpecs.map(({ path, aggregateMethod }: PathSpec) => ({ path, method: aggregateMethod })),
-      data: resultData as Datarow[],
+      data: resultData as DataRow[],
     }
   })
 }
@@ -482,7 +461,7 @@ function outputPositionsGpx(data: DataResult, context: string, res: SimpleRespon
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toDataResult(rows: any[]): DataResult {
-  const resultData = rows.map<Datarow>((row) => {
+  const resultData = rows.map<DataRow>((row) => {
     return [row.time.toISOString(), [row.lon, row.lat]]
   })
   return {
