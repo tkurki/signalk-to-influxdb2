@@ -4,14 +4,8 @@ import { Request, Response, Router } from 'express'
 import { SKInflux } from './influx'
 import { InfluxDB as InfluxV1 } from 'influx'
 import { FluxResultObserver, FluxTableMetaData } from '@influxdata/influxdb-client'
-import { Brand, Context, Path, Timestamp } from '@signalk/server-api'
-
-type AggregateMethod = Brand<string, 'aggregatemethod'>
-
-type ValueList = {
-  path: Path
-  method: AggregateMethod
-}[]
+import { Context, Path, Timestamp } from '@signalk/server-api'
+import { AggregateMethod, HistoryResponse, ValueList } from '@signalk/server-api/history'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Datarow = [Timestamp, ...any[]]
@@ -20,14 +14,6 @@ interface DataResult {
   values: ValueList
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: Datarow[]
-}
-
-export interface ValuesResponse extends DataResult {
-  context: Context
-  range: {
-    from: Timestamp
-    to: Timestamp
-  }
 }
 
 function makeArray(d1: number, d2: number) {
@@ -225,7 +211,7 @@ export function getValues(
           data = nonPositionResult.data.filter((row) => row.slice(1).some((value) => value !== null))
           values = nonPositionResult.values
         }
-        const result: ValuesResponse = {
+        const result: HistoryResponse = {
           context,
           range: {
             from: from.toString() as Timestamp,
