@@ -5,8 +5,9 @@ import waitOn from 'wait-on'
 import retry from 'async-await-retry'
 import { influxPath } from './influx'
 import { Context, Path, PathValue } from '@signalk/server-api'
-import { ValuesResponse, getValues } from './HistoryAPI'
+import { getValues } from './HistoryAPI'
 import { ZoneId, ZonedDateTime } from '@js-joda/core'
+import { ValuesResponse } from '@signalk/server-api/history'
 
 const INFLUX_HOST = process.env['INFLUX_HOST'] || '127.0.0.1'
 
