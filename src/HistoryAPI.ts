@@ -154,7 +154,7 @@ export function getValues(
   const timeResolutionMillis =
     (req.query.resolution
       ? Number.parseFloat(req.query.resolution as string)
-      : (to.toEpochSecond() - from.toEpochSecond()) / 500) * 1000
+      : (to.toEpochSecond() - from.toEpochSecond()) / 1000) * 1000
   const pathExpressions = ((req.query.paths as string) || '').replace(/[^0-9a-z.,:]/gi, '').split(',')
   const pathSpecs: PathSpec[] = pathExpressions.map(splitPathExpression)
 
