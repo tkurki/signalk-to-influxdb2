@@ -52,7 +52,7 @@
     "@signalk/freeboard-sk": "^2.4.0",
     "@signalk/server-api": "^2.5.0",
     "@signalk/signalk-schema": "^1.6.0",
-    "influx": "^5.9.3",
+    "influx": "5.10.0",
     "s2-geometry": "^1.2.10"
   },
   "peerDependencies": {
