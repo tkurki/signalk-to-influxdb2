@@ -23,14 +23,16 @@ export function registerHistoryApiRoute(
   selfId: string,
   debug: (k: string) => void,
 ) {
-  router.get('/signalk/v1/history/values', (req: Request, res: Response) => {
-    const { from, to, context, format } = getRequestParams(req as FromToContextRequest, selfId)
-    getValues(influx, context, from, to, format, debug, req, res)
-  })
-  router.get('/signalk/v1/history/contexts', (req: Request, res: Response) => getContexts(influx, res))
-  router.get('/signalk/v1/history/paths', (req: Request, res: Response) => {
-    const { from, to } = getRequestParams(req as FromToContextRequest, selfId)
-    getPaths(influx, from, to, res)
+  ;['v1', 'v2/api'].forEach((v) => {
+    router.get(`/signalk/${v}/history/values`, (req: Request, res: Response) => {
+      const { from, to, context, format } = getRequestParams(req as FromToContextRequest, selfId)
+      getValues(influx, context, from, to, format, debug, req, res)
+    })
+    router.get(`/signalk/${v}/history/contexts`, (req: Request, res: Response) => getContexts(influx, res))
+    router.get(`/signalk/${v}/history/paths`, (req: Request, res: Response) => {
+      const { from, to } = getRequestParams(req as FromToContextRequest, selfId)
+      getPaths(influx, from, to, res)
+    })
   })
 }
 
