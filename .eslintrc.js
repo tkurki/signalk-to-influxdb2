@@ -19,7 +19,17 @@ module.exports = {
         'prettier'
       ],
       parser: '@typescript-eslint/parser',
-      plugins: ['@typescript-eslint']
+      plugins: ['@typescript-eslint'],
+      rules: {
+        '@typescript-eslint/no-unused-vars': [
+          'error',
+          {
+            argsIgnorePattern: '^_',
+            varsIgnorePattern: '^_',
+            caughtErrorsIgnorePattern: '^_'
+          }
+        ]
+      }
     }
   ]
 }
