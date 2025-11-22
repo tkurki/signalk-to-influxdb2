@@ -15,20 +15,26 @@
 
 import { SKInflux, SKInfluxConfig } from './influx'
 import { EventEmitter } from 'stream'
-import { getDailyLogData, registerHistoryApiRoute } from './HistoryAPI'
+import { getDailyLogData, historyApiProvider, registerHistoryApiRoute } from './HistoryAPI'
 import { IRouter } from 'express'
-import { Context, Delta, hasValues, MetaDelta, Path, PathValue, SourceRef, ValuesDelta } from '@signalk/server-api'
+import {
+  Context,
+  Delta,
+  hasValues,
+  MetaDelta,
+  Path,
+  PathValue,
+  ServerAPI,
+  SourceRef,
+  ValuesDelta,
+} from '@signalk/server-api'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageInfo = require('../package.json')
 
-export interface Logging {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  debug: (...args: any) => void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  error: (...args: any) => void
-}
-export interface App extends Logging, Pick<IRouter, 'get'> {
+export type Logging = Pick<ServerAPI, 'debug' | 'error'>
+
+export interface App extends ServerAPI, Pick<IRouter, 'get'> {
   handleMessage(id: string, delta: Delta): void
   signalk: EventEmitter
   selfId: string
@@ -93,7 +99,13 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
         )
       }
       skInfluxes = config.influxes.map((config: SKInfluxConfig) => new SKInflux(config, app, updatePluginStatus))
-      registerHistoryApiRoute(app, skInfluxes[0], app.selfId, app.debug)
+      if (skInfluxes.length > 0) {
+        registerHistoryApiRoute(app, skInfluxes[0], app.selfId, app.debug)
+        // backwards compatibility: older versions of server-api may not have registerHistoryApiProvider
+        if ((app as any).registerHistoryApiProvider) {
+          app.registerHistoryApiProvider(historyApiProvider(skInfluxes[0], app.selfId, app.debug))
+        }
+      }
 
       onStop = []
       skInfluxes.forEach((skInflux) => {
