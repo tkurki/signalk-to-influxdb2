@@ -265,6 +265,7 @@ function fetchValues(
       data = nonPositionResult.data.filter((row) => row.slice(1).some((value) => value !== null))
       values = nonPositionResult.values
     }
+    debug(`returning ${data.length} valuerows`)
     return {
       context,
       range: {
