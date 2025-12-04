@@ -3,8 +3,18 @@
 const TJS = require('typescript-json-schema')
 const { resolve } = require('path')
 const $RefParser = require('@apidevtools/json-schema-ref-parser')
+const ts = require('typescript')
 
-const program = TJS.getProgramFromFiles([resolve(__dirname, 'src/plugin.ts')])
+const compilerOptions = {
+  strict: true,
+  target: ts.ScriptTarget.ES2020,
+  module: ts.ModuleKind.CommonJS,
+  skipLibCheck: true,
+  esModuleInterop: true,
+  typeRoots: ['./src', './node_modules/@types']
+}
+
+const program = TJS.getProgramFromFiles([resolve(__dirname, 'src/plugin.ts')], compilerOptions)
 const schemaFromTs = TJS.generateSchema(program, 'PluginConfig')
 let schema = {}
 $RefParser.dereference(schemaFromTs, (err, derefSchema) => {
