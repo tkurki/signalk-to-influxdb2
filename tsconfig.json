@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "target": "es5",
     "module": "commonjs",
     "declaration": true,
     "rootDir": "src",
@@ -8,6 +7,13 @@
     "strict": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "typeRoots": ["./src", "./node_modules/@types"]
+    "typeRoots": ["./src", "./node_modules/@types"],
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "ES2022.Intl",
+      "DOM"
+    ],
+    "moduleResolution": "node"
   }
 }
