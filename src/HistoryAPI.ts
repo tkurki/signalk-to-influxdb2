@@ -268,7 +268,7 @@ function getNumericValues(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows = result as any[]
     debug(`got ${rows.length} rows in ${Date.now() - start}ms`)
-    const resultLength = rows.length / uniquePaths.length
+    const resultLength = rows.length
     const resultData = makeArray(resultLength, pathSpecs.length + 1)
 
     for (let j = 0; j < resultLength; j++) {
