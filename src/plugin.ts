@@ -18,6 +18,7 @@ import { EventEmitter } from 'stream'
 import { getDailyLogData, registerHistoryApiRoute } from './HistoryAPI'
 import { IRouter } from 'express'
 import { Context, Delta, hasValues, MetaDelta, Path, PathValue, SourceRef, ValuesDelta } from '@signalk/server-api'
+import { PluginConfigSchema } from './PluginConfigSchema'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageInfo = require('../package.json')
@@ -61,21 +62,12 @@ export interface InfluxPlugin {
 }
 
 export interface PluginConfig {
-  /**
-   * @title Output Daily Distance Log values
-   * @description Calculate periodically daily distance from navigation.position values since 00:00 local time and output under navigation.trip.daily
-   * @default false
-   */
   outputDailyLog: boolean
   influxes: SKInfluxConfig[]
 }
 
 export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const schema = require('../dist/PluginConfig.json')
-  const writeOptionsProps = schema.properties.influxes.items.properties.writeOptions.properties
-  delete writeOptionsProps.writeFailed
-  delete writeOptionsProps.writeSuccess
+  const schema = PluginConfigSchema
   const selfContext = 'vessels.' + app.selfId
 
   let skInfluxes: SKInflux[] = []
