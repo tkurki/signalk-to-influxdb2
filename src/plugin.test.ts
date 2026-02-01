@@ -75,6 +75,10 @@ describe('Plugin', () => {
     })
   })
 
+  afterEach(() => {
+    plugin.stop()
+  })
+
   it('writes something to InfluxDb', async () => {
     const TESTVALUES = [
       [
