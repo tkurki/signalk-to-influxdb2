@@ -172,40 +172,102 @@ export function getValues(
       if (format === 'gpx' && pathSpecs[0]?.path === 'navigation.position') {
         outputPositionsGpx(positionResult, context, res)
       } else {
-        if (
-          positionResult.data.length > 0 &&
-          nonPositionResult.data.length > 0 &&
-          positionResult.data.length !== nonPositionResult.data.length
-        ) {
-          throw new Error('Query result lengths do not match')
-        }
+        // Collate by timestamp (union of timestamps from both sources), not by row order.
+        // This avoids mismatches when one query returns extra (all-null) rows.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let data: any[] = []
+        const data: any[] = []
         let values: ValueList = []
-        if (positionResult.data.length > 0) {
-          data = positionResult.data
-          values = positionResult.values
-          if (nonPositionResult.data.length) {
-            values = values.concat(nonPositionResult.values)
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
-            nonPositionResult.data.forEach(([ts, ...numericValues]: any[], i: number) => {
-              let hasNonNulls = data[i][1][0] !== null //first coordinate of position is not null
-              numericValues.forEach((value) => (hasNonNulls = hasNonNulls || value !== null))
-              if (hasNonNulls) {
-                data[i].push(...numericValues)
-              }
-            })
-            //filter out rows with all null values
-            data = data.filter((row) => row.length !== pathSpecs.length)
-          } else {
-            //only positions, check that first coordinate is not null
-            data = data.filter((row) => row[1][0] !== null)
+
+        // Build timestamp -> positionValue map.
+        // In InfluxQL, `group by time()` without `fill(none)` can create rows with
+        // null lat/lon; treat those as missing and emit `null` in the response.
+        const positionByTs = new Map<string, [number, number] | null>()
+        positionResult.data.forEach((row: DataRow) => {
+          const ts = row[0] as string
+          const pos = row[1]
+          if (!Array.isArray(pos)) {
+            return
           }
-        } else {
-          //filter out rows with all null values
-          data = nonPositionResult.data.filter((row) => row.slice(1).some((value) => value !== null))
-          values = nonPositionResult.values
+
+          const [lon, lat] = pos
+          if ((lon === null || lon === undefined) && (lat === null || lat === undefined)) {
+            return
+          }
+
+          const existing = positionByTs.get(ts)
+          if (!existing) {
+            positionByTs.set(ts, [lon, lat])
+            return
+          }
+
+          if (!Array.isArray(existing)) {
+            positionByTs.set(ts, [lon, lat])
+            return
+          }
+
+          const [existingLon, existingLat] = existing
+          const mergedLon = (existingLon === null || existingLon === undefined) && lon != null ? lon : existingLon
+          const mergedLat = (existingLat === null || existingLat === undefined) && lat != null ? lat : existingLat
+          positionByTs.set(ts, [mergedLon, mergedLat])
+        })
+
+        // Build timestamp -> numericValues map, merging duplicates by filling missing values.
+        const numericByTs = new Map<string, (number | null)[]>()
+        nonPositionResult.data.forEach((row: DataRow) => {
+          const ts = row[0] as string
+          const numericValues = row.slice(1) as (number | null)[]
+          const existing = numericByTs.get(ts)
+          if (!existing) {
+            numericByTs.set(ts, [...numericValues])
+            return
+          }
+          for (let k = 0; k < numericValues.length; k++) {
+            if (
+              (existing[k] === null || existing[k] === undefined) &&
+              numericValues[k] !== null &&
+              numericValues[k] !== undefined
+            ) {
+              existing[k] = numericValues[k]
+            }
+          }
+        })
+
+        // Values list ordering: position (if requested) first, then numeric.
+        if (positionPathSpecs.length > 0 && positionResult.values.length > 0) {
+          values = values.concat(positionResult.values)
         }
+        if (nonPositionPathSpecs.length > 0 && nonPositionResult.values.length > 0) {
+          values = values.concat(nonPositionResult.values)
+        }
+
+        // Union timestamps from both results.
+        const timestamps = Array.from(new Set<string>([...positionByTs.keys(), ...numericByTs.keys()]))
+        timestamps.sort()
+
+        const numericWidth = nonPositionPathSpecs.length
+        timestamps.forEach((ts) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const row: any[] = [ts]
+
+          if (positionPathSpecs.length > 0) {
+            row.push(positionByTs.get(ts) ?? null)
+          }
+          if (nonPositionPathSpecs.length > 0) {
+            row.push(...(numericByTs.get(ts) ?? new Array(numericWidth).fill(null)))
+          }
+
+          const hasAnyValue = row.slice(1).some((v) => {
+            if (Array.isArray(v)) {
+              return v.some((x) => x !== null && x !== undefined)
+            }
+            return v !== null && v !== undefined
+          })
+
+          if (hasAnyValue) {
+            data.push(row)
+          }
+        })
+
         const result: ValuesResponse = {
           context,
           range: {
