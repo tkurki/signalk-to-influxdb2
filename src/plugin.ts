@@ -15,9 +15,10 @@
 
 import { SKInflux, SKInfluxConfig } from './influx'
 import { EventEmitter } from 'stream'
-import { getDailyLogData, registerHistoryApiRoute } from './HistoryAPI'
+import { getDailyLogData, InfluxHistoryProvider } from './HistoryAPI'
 import { IRouter } from 'express'
 import { Context, Delta, hasValues, MetaDelta, Path, PathValue, SourceRef, ValuesDelta } from '@signalk/server-api'
+import { HistoryApiRegistry } from '@signalk/server-api/history'
 import { PluginConfigSchema } from './PluginConfigSchema'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -29,7 +30,7 @@ export interface Logging {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   error: (...args: any) => void
 }
-export interface App extends Logging, Pick<IRouter, 'get'> {
+export interface App extends Logging, Pick<IRouter, 'get'>, HistoryApiRegistry {
   handleMessage(id: string, delta: Delta): void
   signalk: EventEmitter
   selfId: string
@@ -85,7 +86,8 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
         )
       }
       skInfluxes = config.influxes.map((config: SKInfluxConfig) => new SKInflux(config, app, updatePluginStatus))
-      registerHistoryApiRoute(app, skInfluxes[0], app.selfId, app.debug)
+      const historyProvider = new InfluxHistoryProvider(skInfluxes[0], app.selfId, app.debug)
+      app.registerHistoryApiProvider(historyProvider)
 
       onStop = []
       skInfluxes.forEach((skInflux) => {

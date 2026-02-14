@@ -1,13 +1,39 @@
 import { DateTimeFormatter, LocalDate, ZoneId, ZonedDateTime } from '@js-joda/core'
 
-import { Request, Response, Router } from 'express'
 import { SKInflux } from './influx'
 import { InfluxDB as InfluxV1 } from 'influx'
 import { FluxResultObserver, FluxTableMetaData } from '@influxdata/influxdb-client'
 import { Context, Path, Timestamp } from '@signalk/server-api'
-import { AggregateMethod, DataRow, ValueList, ValuesResponse } from '@signalk/server-api/history'
+import {
+  AggregateMethod,
+  DataRow,
+  ValueList,
+  ValuesResponse,
+  HistoryApi,
+  ValuesRequest,
+  PathsRequest,
+  ContextsRequest,
+  PathsResponse,
+  ContextsResponse,
+} from '@signalk/server-api/history'
 
 export type DataResult = Omit<ValuesResponse, 'context' | 'range'>
+
+const DEFAULT_EMA_PERIOD = 5
+
+function resolveEmaParams(spec: PathSpec): { period: number; alpha: number } {
+  const rawParam = spec.parameters.length > 0 ? Number.parseFloat(spec.parameters[0]) : Number.NaN
+
+  if (Number.isFinite(rawParam) && rawParam > 0 && rawParam < 1) {
+    const alpha = rawParam
+    const period = 2 / alpha - 1
+    return { period, alpha }
+  }
+
+  const period = Number.isFinite(rawParam) && rawParam > 0 ? rawParam : DEFAULT_EMA_PERIOD
+  const alpha = 2 / (period + 1)
+  return { period, alpha }
+}
 
 function makeArray(d1: number, d2: number) {
   const arr = []
@@ -17,49 +43,306 @@ function makeArray(d1: number, d2: number) {
   return arr
 }
 
-export function registerHistoryApiRoute(
-  router: Pick<Router, 'get'>,
-  influx: SKInflux,
-  selfId: string,
-  debug: (k: string) => void,
-) {
-  ;['v1', 'v2/api'].forEach((v) => {
-    router.get(`/signalk/${v}/history/values`, (req: Request, res: Response) => {
-      const { from, to, context, format } = getRequestParams(req as FromToContextRequest, selfId)
-      getValues(influx, context, from, to, format, debug, req, res)
-    })
-    router.get(`/signalk/${v}/history/contexts`, (req: Request, res: Response) => getContexts(influx, res))
-    router.get(`/signalk/${v}/history/paths`, (req: Request, res: Response) => {
-      const { from, to } = getRequestParams(req as FromToContextRequest, selfId)
-      getPaths(influx, from, to, res)
-    })
-  })
-}
+export class InfluxHistoryProvider implements HistoryApi {
+  constructor(private influx: SKInflux, private selfId: string, private debug: (k: string) => void) {}
 
-async function getContexts(influx: SKInflux, res: Response) {
-  influx.queryApi
-    .collectRows(
+  async getValues(query: ValuesRequest): Promise<ValuesResponse> {
+    const { from, to } = getTimeRange(query)
+    const context = query.context || (`vessels.${this.selfId}` as Context)
+    const resolution = query.resolution || (to.toEpochSecond() - from.toEpochSecond()) / 1000
+
+    // Convert pathSpecs to the format expected by internal functions
+    const pathSpecs: PathSpec[] = query.pathSpecs.map((spec) => ({
+      path: spec.path,
+      queryResultName: spec.path.replace(/\./g, '_'),
+      aggregateMethod: spec.aggregate,
+      aggregateFunction: (functionForAggregate[spec.aggregate] as string) || 'mean',
+      parameters: spec.parameter || [],
+    }))
+
+    const positionPathSpecs = pathSpecs.filter(({ path }) => path === 'navigation.position').slice(0, 1)
+    const nonPositionPathSpecs = pathSpecs.filter(({ path }) => path !== 'navigation.position')
+    const needsCollation = nonPositionPathSpecs.length > 0 && positionPathSpecs.length > 0
+
+    // Calculate extended query window for SMA and EMA
+    const maxSmaWindow = nonPositionPathSpecs.reduce((max, spec) => {
+      if (spec.aggregateMethod === 'sma') {
+        const windowSize = spec.parameters.length > 0 ? parseInt(spec.parameters[0], 10) : 5
+        return Math.max(max, windowSize)
+      }
+      return max
+    }, 0)
+
+    // EMA needs more history: initial SMA period (3x EMA period) + EMA period
+    const maxEmaWindow = nonPositionPathSpecs.reduce((max, spec) => {
+      if (spec.aggregateMethod === 'ema') {
+        const { period } = resolveEmaParams(spec)
+        // Need 3x period for initial SMA + 1x period for EMA itself
+        return Math.max(max, Math.ceil(period * 4))
+      }
+      return max
+    }, 0)
+
+    const maxWindow = Math.max(maxSmaWindow, maxEmaWindow)
+
+    // Extend the start time backwards to get enough data for SMA/EMA calculation
+    const extendedFrom = maxWindow > 0 ? from.minusNanos(maxWindow * resolution * 1000 * 1_000_000) : from
+
+    const positionResult = positionPathSpecs.length
+      ? getPositions(this.influx.v1Client, context, from, to, resolution * 1000, needsCollation, this.debug)
+      : Promise.resolve({
+          values: [],
+          data: [],
+        })
+
+    const nonPositionResult: Promise<DataResult> = nonPositionPathSpecs.length
+      ? getNumericValues(
+          this.influx,
+          context,
+          extendedFrom,
+          to,
+          resolution * 1000,
+          nonPositionPathSpecs,
+          needsCollation,
+          '',
+          this.debug,
+        )
+      : Promise.resolve({
+          values: [],
+          data: [],
+        })
+
+    const [posResult, nonPosResult] = await Promise.all([positionResult, nonPositionResult])
+
+    // Apply SMA and EMA post-processing if needed
+    let processedNonPosResult = nonPosResult
+    if ((maxSmaWindow > 0 || maxEmaWindow > 0) && nonPosResult.data.length > 0) {
+      processedNonPosResult = applyMovingAveragePostProcessing(
+        nonPosResult,
+        nonPositionPathSpecs,
+        from.toString() as Timestamp,
+      )
+    }
+
+    if (
+      posResult.data.length > 0 &&
+      processedNonPosResult.data.length > 0 &&
+      posResult.data.length !== processedNonPosResult.data.length
+    ) {
+      throw new Error('Query result lengths do not match')
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let data: any[] = []
+    let values: ValueList = []
+
+    if (posResult.data.length > 0) {
+      data = posResult.data
+      values = posResult.values
+      if (processedNonPosResult.data.length) {
+        values = values.concat(processedNonPosResult.values)
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+        processedNonPosResult.data.forEach(([ts, ...numericValues]: any[], i: number) => {
+          let hasNonNulls = data[i][1][0] !== null //first coordinate of position is not null
+          numericValues.forEach((value) => (hasNonNulls = hasNonNulls || value !== null))
+          if (hasNonNulls) {
+            data[i].push(...numericValues)
+          }
+        })
+        //filter out rows with all null values
+        data = data.filter((row) => row.length !== pathSpecs.length)
+      } else {
+        //only positions, check that first coordinate is not null
+        data = data.filter((row) => row[1][0] !== null)
+      }
+    } else {
+      //filter out rows with all null values
+      data = processedNonPosResult.data.filter((row) => row.slice(1).some((value) => value !== null))
+      values = processedNonPosResult.values
+    }
+
+    return {
+      context,
+      range: {
+        from: from.toString() as Timestamp,
+        to: to.toString() as Timestamp,
+      },
+      values,
+      data,
+    }
+  }
+
+  async getContexts(): Promise<ContextsResponse> {
+    const contexts = await this.influx.queryApi.collectRows(
       `
   import "influxdata/influxdb/v1"
-  v1.tagValues(bucket: "${influx.bucket}", tag: "context")
+  v1.tagValues(bucket: "${this.influx.bucket}", tag: "context")
   `,
       (row, tableMeta) => {
         return tableMeta.get(row, '_value')
       },
     )
-    .then((r) => res.json(r))
+    return contexts as Context[]
+  }
+
+  async getPaths(): Promise<PathsResponse> {
+    const paths = await this.influx.queryApi.collectRows(
+      `
+    import "influxdata/influxdb/schema"
+    schema.measurements(bucket: "${this.influx.bucket}")`,
+      (row, tableMeta) => {
+        return tableMeta.get(row, '_value')
+      },
+    )
+    return paths as Path[]
+  }
 }
 
-async function getPaths(influx: SKInflux, from: ZonedDateTime, to: ZonedDateTime, res: Response) {
-  const r = await influx.queryApi.collectRows(
-    `
-    import "influxdata/influxdb/schema"
-    schema.measurements(bucket: "${influx.bucket}")`,
-    (row, tableMeta) => {
-      return tableMeta.get(row, '_value')
-    },
-  )
-  res.json(r)
+function getTimeRange(query: ValuesRequest | PathsRequest | ContextsRequest): {
+  from: ZonedDateTime
+  to: ZonedDateTime
+} {
+  if ('duration' in query && query.duration !== undefined) {
+    const durationMs = typeof query.duration === 'number' ? query.duration : query.duration.total('milliseconds')
+
+    if ('from' in query && query.from !== undefined) {
+      const from = ZonedDateTime.parse(query.from.toString())
+      const to = from.plusNanos(durationMs * 1_000_000)
+      return { from, to }
+    } else if ('to' in query && query.to !== undefined) {
+      const to = ZonedDateTime.parse(query.to.toString())
+      const from = to.minusNanos(durationMs * 1_000_000)
+      return { from, to }
+    } else {
+      const to = ZonedDateTime.now(ZoneId.UTC)
+      const from = to.minusNanos(durationMs * 1_000_000)
+      return { from, to }
+    }
+  } else if ('from' in query && query.from !== undefined) {
+    const from = ZonedDateTime.parse(query.from.toString())
+    if ('to' in query && query.to !== undefined) {
+      const to = ZonedDateTime.parse(query.to.toString())
+      return { from, to }
+    } else {
+      const to = ZonedDateTime.now(ZoneId.UTC)
+      return { from, to }
+    }
+  }
+
+  throw new Error('Invalid time range parameters')
+}
+
+function applyMovingAveragePostProcessing(
+  result: DataResult,
+  pathSpecs: PathSpec[],
+  requestedFromTimestamp: Timestamp,
+): DataResult {
+  const data = result.data
+
+  // Find paths that require SMA or EMA processing
+  const smaIndices = pathSpecs.map((spec, idx) => ({ spec, idx })).filter(({ spec }) => spec.aggregateMethod === 'sma')
+
+  const emaIndices = pathSpecs.map((spec, idx) => ({ spec, idx })).filter(({ spec }) => spec.aggregateMethod === 'ema')
+
+  if (smaIndices.length === 0 && emaIndices.length === 0) {
+    // No processing needed, just trim to requested time range
+    const requestedFromMs = new Date(requestedFromTimestamp).toISOString()
+    const trimmedData = data.filter((row) => (row[0] as string) >= requestedFromMs)
+    return {
+      values: result.values,
+      data: trimmedData as DataRow[],
+    }
+  }
+
+  // Process each column
+  const processedData = data.map((row) => [...row])
+
+  // Calculate SMA for each SMA column
+  smaIndices.forEach(({ spec, idx }) => {
+    const windowSize = spec.parameters.length > 0 ? parseInt(spec.parameters[0], 10) : 5
+    const columnIndex = idx + 1 // +1 because first column is timestamp
+
+    for (let i = 0; i < processedData.length; i++) {
+      const startIdx = Math.max(0, i - windowSize + 1)
+      const values: number[] = []
+
+      // Collect non-null values in the window
+      for (let j = startIdx; j <= i; j++) {
+        const value = data[j][columnIndex]
+        if (value !== null && value !== undefined && typeof value === 'number') {
+          values.push(value)
+        }
+      }
+
+      // Calculate average if we have values
+      if (values.length > 0) {
+        const sum = values.reduce((acc, val) => acc + val, 0)
+        processedData[i][columnIndex] = sum / values.length
+      } else {
+        processedData[i][columnIndex] = null
+      }
+    }
+  })
+
+  // Calculate EMA for each EMA column
+  emaIndices.forEach(({ spec, idx }) => {
+    const { period, alpha } = resolveEmaParams(spec)
+    const columnIndex = idx + 1 // +1 because first column is timestamp
+    const smoothingFactor = alpha
+
+    // Use 3x period for initial SMA to seed the EMA
+    const initialSmaWindow = Math.max(1, Math.round(period * 3))
+    let ema: number | null = null
+
+    for (let i = 0; i < processedData.length; i++) {
+      const currentValue = data[i][columnIndex]
+
+      if (currentValue === null || currentValue === undefined || typeof currentValue !== 'number') {
+        processedData[i][columnIndex] = ema // Carry forward last EMA when current value is null
+        continue
+      }
+
+      if (ema === null) {
+        // Initialize EMA with SMA of first N values
+        if (i >= initialSmaWindow - 1) {
+          const startIdx = Math.max(0, i - initialSmaWindow + 1)
+          const values: number[] = []
+
+          for (let j = startIdx; j <= i; j++) {
+            const value = data[j][columnIndex]
+            if (value !== null && value !== undefined && typeof value === 'number') {
+              values.push(value)
+            }
+          }
+
+          if (values.length > 0) {
+            const sum = values.reduce((acc, val) => acc + val, 0)
+            ema = sum / values.length
+            processedData[i][columnIndex] = ema
+          } else {
+            processedData[i][columnIndex] = null
+          }
+        } else {
+          // Not enough data yet for initial SMA
+          processedData[i][columnIndex] = null
+        }
+      } else {
+        // Calculate EMA: EMA_t = α * Value_t + (1 - α) * EMA_{t-1}
+        ema = smoothingFactor * currentValue + (1 - smoothingFactor) * ema
+        processedData[i][columnIndex] = ema
+      }
+    }
+  })
+
+  // Trim to requested time range
+  // Convert requested timestamp to millisecond precision for comparison
+  const requestedFromMs = new Date(requestedFromTimestamp).toISOString()
+  const trimmedData = processedData.filter((row) => (row[0] as string) >= requestedFromMs)
+
+  return {
+    values: result.values,
+    data: trimmedData as DataRow[],
+  }
 }
 
 interface ValuesResult {
@@ -462,18 +745,12 @@ export async function getValuesFlux(
   influx.queryApi.queryRows(query, o)
 }
 
-function getContext(contextFromQuery: string, selfId: string): Context {
-  if (!contextFromQuery || contextFromQuery === 'vessels.self' || contextFromQuery === 'self') {
-    return `vessels.${selfId}` as Context
-  }
-  return contextFromQuery.replace(/ /gi, '') as Context
-}
-
 interface PathSpec {
   path: Path
   queryResultName: string
   aggregateMethod: AggregateMethod
   aggregateFunction: string
+  parameters: string[]
 }
 
 function splitPathExpression(pathExpression: string): PathSpec {
@@ -487,6 +764,7 @@ function splitPathExpression(pathExpression: string): PathSpec {
     queryResultName: parts[0].replace(/\./g, '_'),
     aggregateMethod,
     aggregateFunction: (functionForAggregate[aggregateMethod] as string) || 'mean()',
+    parameters: [],
   }
 }
 
@@ -539,30 +817,8 @@ const functionForAggregate: { [key: string]: string } = {
   min: 'min',
   max: 'max',
   first: 'first',
-}
-
-type FromToContextRequest = Request<
-  unknown,
-  unknown,
-  unknown,
-  {
-    from: string
-    to: string
-    context: string
-    format: string
-  }
->
-
-const getRequestParams = ({ query }: FromToContextRequest, selfId: string) => {
-  try {
-    const from = ZonedDateTime.parse(query['from'])
-    const to = ZonedDateTime.parse(query['to'])
-    const format = query['format']
-    const context: Context = getContext(query.context, selfId)
-    return { from, to, format, context }
-  } catch (e: unknown) {
-    throw new Error(`Error extracting from/to query parameters from ${JSON.stringify(query)}`)
-  }
+  sma: 'mean', // Use mean from DB, then apply SMA post-processing
+  ema: 'mean', // Use mean from DB, then apply EMA post-processing
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
