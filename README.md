@@ -41,6 +41,63 @@ The plugin can connect to multiple InfluxDB instances. We will only configure on
 If you're mostly interested in your own boat data, select "Store only self data".
 Leaving that unchecked may result in a lot of data being stored, especially if you are in a busy area.
 
+## Filtering Rules
+
+Filtering rules provide fine-grained control over which data is written to InfluxDB. Rules are evaluated in order — the first matching rule decides whether the value is written or ignored. If no rule matches, the value is written.
+
+Each rule has three fields:
+
+- **Allow**: if checked, matching data is written; if unchecked, matching data is ignored.
+- **Path**: a literal Signal K path or a JavaScript regular expression. Leave empty to match all paths.
+- **Source**: a literal source reference or a JavaScript regular expression. Leave empty to match all sources.
+
+Adding filtering rules **disables** the legacy Ignored Paths and Ignored Sources settings.
+
+### Example 1: Ignore a single path
+
+Ignore `navigation.speedOverGround` from any source, write everything else.
+
+| Allow | Path | Source |
+|-------|------|--------|
+| ☐ | `navigation.speedOverGround` | |
+
+### Example 2: Allow only specific paths
+
+Allow only `navigation.speedOverGround` and all `environment.wind.*` paths, ignore everything else. The catch-all `.*` deny rule at the end ensures that anything not explicitly allowed is ignored.
+
+| Allow | Path | Source |
+|-------|------|--------|
+| ☑ | `navigation.speedOverGround` | |
+| ☑ | `environment.wind.*` | |
+| ☐ | `.*` | |
+
+### Example 3: Allow only specific sources
+
+Accept data only from sources `A` and `B`, regardless of the path. All other sources are ignored.
+
+| Allow | Path | Source |
+|-------|------|--------|
+| ☑ | | `A` |
+| ☑ | | `B` |
+| ☐ | | `.*` |
+
+### Example 4: Combine path and source filters
+
+Allow `navigation.*` paths only from source `A` and `environment.*` paths only from source `B`. Everything else — including other path/source combinations — is ignored.
+
+| Allow | Path | Source |
+|-------|------|--------|
+| ☑ | `navigation.*` | `A` |
+| ☑ | `environment.*` | `B` |
+| ☐ | `.*` | `.*` |
+
+With this configuration:
+- `navigation.speedOverGround` from source `A` → **written**
+- `navigation.speedOverGround` from source `B` → **ignored**
+- `environment.wind.speedApparent` from source `B` → **written**
+- `environment.wind.speedApparent` from source `A` → **ignored**
+- `steering.rudderAngle` from any source → **ignored**
+
 Set the other configuration options as to your liking. Brief guidance:
 
 - Ignored paths and sources are important for limiting the amount of data. However, don't set them until you have verified data is being stored in the DB.
