@@ -48,7 +48,8 @@ export class InfluxHistoryProvider implements HistoryApi {
 
   async getValues(query: ValuesRequest): Promise<ValuesResponse> {
     const { from, to } = getTimeRange(query)
-    const context = query.context || (`vessels.${this.selfId}` as Context)
+    const context = ((query.context === 'vessels.self' ? `vessels.${this.selfId}` : query.context) ||
+      `vessels.${this.selfId}`) as Context
     const resolution = query.resolution || (to.toEpochSecond() - from.toEpochSecond()) / 1000
 
     // Convert pathSpecs to the format expected by internal functions

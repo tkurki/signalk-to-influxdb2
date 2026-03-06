@@ -1164,6 +1164,60 @@ describe('Plugin', () => {
       expect(firstValue).to.be.greaterThan(0)
       expect(firstValue).to.be.lessThan(125) // Should be less than max value
     })
+
+    it('maps vessels.self context to the self vessel context', async () => {
+      const baseTime = new Date('2024-01-01T12:00:00Z')
+      const testPath = 'navigation.speedOverGround' as Path
+
+      // Write a few data points under the self context
+      for (let i = 1; i <= 5; i++) {
+        const timestamp = new Date(baseTime.getTime() + i * 1000)
+        app.signalk.emit('delta', {
+          context: TESTCONTEXT,
+          updates: [
+            {
+              $source: TESTSOURCE,
+              timestamp: timestamp.toISOString(),
+              values: [
+                {
+                  path: testPath,
+                  value: i,
+                },
+              ],
+            },
+          ],
+        })
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+
+      await plugin.flush()
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      const influx = plugin.skInfluxes()[0]
+      const historyProvider = new InfluxHistoryProvider(influx, selfId, app.debug)
+
+      const from = Temporal.Instant.from('2024-01-01T12:00:01Z')
+      const to = Temporal.Instant.from('2024-01-01T12:00:05Z')
+
+      // Query using 'vessels.self' – should resolve to TESTCONTEXT and return data
+      const result = await historyProvider.getValues({
+        from,
+        to,
+        context: 'vessels.self' as Context,
+        resolution: 1,
+        pathSpecs: [
+          {
+            path: testPath,
+            aggregate: 'average',
+            parameter: [],
+          },
+        ],
+      })
+
+      // Context in response should be the actual self context, not 'vessels.self'
+      expect(result.context).to.equal(TESTCONTEXT)
+      expect(result.data.length).to.be.greaterThan(0)
+    })
   })
 })
 
