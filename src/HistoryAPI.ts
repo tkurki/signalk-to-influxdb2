@@ -2,7 +2,6 @@ import { DateTimeFormatter, LocalDate, ZoneId, ZonedDateTime } from '@js-joda/co
 
 import { SKInflux } from './influx'
 import { InfluxDB as InfluxV1 } from 'influx'
-import { FluxResultObserver, FluxTableMetaData } from '@influxdata/influxdb-client'
 import { Context, Path, Timestamp } from '@signalk/server-api'
 import {
   AggregateMethod,
@@ -346,20 +345,6 @@ function applyMovingAveragePostProcessing(
   }
 }
 
-interface ValuesResult {
-  context: string
-  range: {
-    from: string
-    to: string
-  }
-  values: {
-    path: string
-    method: string
-    source?: string
-  }[]
-  data: ValuesResultRow[]
-}
-
 interface SimpleResponse {
   status: (s: number) => void
   /* eslint-disable-next-line  @typescript-eslint/no-explicit-any */
@@ -375,9 +360,6 @@ interface SimpleRequest {
     format?: string
   }
 }
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ValuesResultRow = any[]
 
 export function getPositions(
   v1Client: InfluxV1,
@@ -642,108 +624,6 @@ function getNumericValues(
       data: resultData as DataRow[],
     }
   })
-}
-
-export async function getValuesFlux(
-  influx: SKInflux,
-  context: string,
-  from: ZonedDateTime,
-  to: ZonedDateTime,
-  debug: (s: string) => void,
-  req: SimpleRequest,
-  res: SimpleResponse,
-): Promise<ValuesResult | void> {
-  const timeResolutionMillis =
-    (req.query.resolution
-      ? Number.parseFloat(req.query.resolution as string)
-      : (to.toEpochSecond() - from.toEpochSecond()) / 500) * 1000
-
-  const pathExpressions = ((req.query.paths as string) || '').replace(/[^0-9a-z.,:]/gi, '').split(',')
-  const pathSpecs: PathSpec[] = pathExpressions.map(splitPathExpression)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const resultData: any[] = []
-
-  const measurements = pathSpecs
-    .map(
-      ({ path, aggregateFunction, queryResultName }, i) => `
-  dataForContext
-  |> filter(fn: (r) => r._measurement == "${path}")
-  |> aggregateWindow(every: ${timeResolutionMillis.toFixed(0)}ms, fn: ${aggregateFunction})
-  |> yield(name: "${queryResultName + i}")
-  `,
-    )
-    .join('\n')
-  let query = `
-    dataForContext = from(bucket: "${influx.bucket}")
-    |> range(start: ${from.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z, stop: ${to.format(
-    DateTimeFormatter.ISO_LOCAL_DATE_TIME,
-  )}Z)
-    |> filter(fn: (r) => r.context == "${context}")
-
-    ${measurements}
-    `
-
-  if (pathSpecs[0].path === 'navigation.position') {
-    query = `
-    from(bucket: "${influx.bucket}")
-    |> range(start: ${from.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}Z, stop: ${to.format(
-      DateTimeFormatter.ISO_LOCAL_DATE_TIME,
-    )}Z)
-    |> filter(fn: (r) =>
-      r.context == "${context}" and
-      r._measurement == "navigation.position" and (r._field == "lat" or r._field == "lon") )
-    |> aggregateWindow(every: ${timeResolutionMillis.toFixed(0)}ms, fn: first)
-    |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
-    |> keep(columns: ["_time", "lat", "lon"])
-    |> sort(columns:["_time"])
-    `
-  }
-  debug(query)
-
-  const queryResultNames = pathSpecs.map(({ queryResultName }, i) => `${queryResultName + i}`)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const resultTimes: Record<any, number> = {}
-  let i = 0
-  let j = 0
-
-  const start = Date.now()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const o: FluxResultObserver<any> = {
-    next: (row: string[], tableMeta: FluxTableMetaData) => {
-      if (j++ === 0) {
-        debug(`start  ${Date.now() - start}`)
-      }
-      const time = tableMeta.get(row, '_time')
-      if (resultTimes[time] === undefined) {
-        resultTimes[time] = i++
-        resultData.push([time])
-      }
-      const result = tableMeta.get(row, 'result')
-      const value = tableMeta.get(row, '_value')
-      const fieldIndex = queryResultNames.indexOf(result)
-      resultData[resultTimes[time]][fieldIndex + 1] = value
-      return true
-    },
-    error: (s: Error) => {
-      console.error(s.message)
-      console.error(query)
-      res.status(500)
-      res.json(s)
-    },
-    complete: () => {
-      debug(`complete ${Date.now() - start}`)
-      res.json({
-        context,
-        range: {
-          from: from.toString() as Timestamp,
-          to: to.toString() as Timestamp,
-        },
-        values: pathSpecs.map(({ path, aggregateMethod }: PathSpec) => ({ path, method: aggregateMethod })),
-        data: resultData,
-      })
-    },
-  }
-  influx.queryApi.queryRows(query, o)
 }
 
 interface PathSpec {
