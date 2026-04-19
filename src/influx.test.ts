@@ -1,5 +1,21 @@
 import { expect } from 'chai'
-import { SKInflux, SKInfluxConfig } from './influx'
+import { SKInflux, SKInfluxConfig, bucketToV1DatabaseName } from './influx'
+
+describe('bucketToV1DatabaseName', () => {
+  it('should replace forward slashes with underscores', () => {
+    expect(bucketToV1DatabaseName('my/bucket')).to.equal('my_bucket')
+    expect(bucketToV1DatabaseName('a/b/c')).to.equal('a_b_c')
+  })
+
+  it('should replace backslashes with underscores', () => {
+    expect(bucketToV1DatabaseName('my\\bucket')).to.equal('my_bucket')
+  })
+
+  it('should leave names without slashes unchanged', () => {
+    expect(bucketToV1DatabaseName('my_bucket')).to.equal('my_bucket')
+    expect(bucketToV1DatabaseName('simple')).to.equal('simple')
+  })
+})
 
 describe('ignoreStatusByRule', () => {
   const noopLogging = {

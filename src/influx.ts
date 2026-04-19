@@ -116,6 +116,12 @@ type PartialBy<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
 
 export const influxPath = (path: string) => (path !== '' ? path : '<empty>')
 
+/**
+ * Sanitize a bucket name for use as an InfluxDB v1 compatibility database name.
+ * InfluxDB v1 database names do not support forward slashes or backslashes.
+ */
+export const bucketToV1DatabaseName = (bucket: string) => bucket.replace(/[/\\]/g, '_')
+
 enum JsValueType {
   number = 'number',
   string = 'string',
@@ -131,6 +137,7 @@ export class SKInflux {
   private influx: InfluxDB
   public org: string
   public bucket: string
+  public v1DatabaseName: string
   private writeApi: WriteApi
   public queryApi: QueryApi
   public writtenLinesCount = 0
@@ -162,6 +169,7 @@ export class SKInflux {
     this.influx = new InfluxDB(config)
     this.org = org
     this.bucket = bucket
+    this.v1DatabaseName = bucketToV1DatabaseName(bucket)
     this.url = url
     this.onlySelf = onlySelf
     this.ignoredPaths = ignoredPaths
@@ -192,7 +200,7 @@ export class SKInflux {
       password: '',
       port: Number(parsedUrl.port),
       protocol: <'http' | 'https'>parsedUrl.protocol.slice(0, -1),
-      database: bucket,
+      database: this.v1DatabaseName,
       options: {
         headers: {
           Authorization: `Token ${config.token}`,
@@ -233,11 +241,11 @@ export class SKInflux {
       throw new Error('Error retrieving dbrs')
     }
     //is there mapping where v1 database name is the same as bucket
-    if (!dbrs.content.find((dbr) => dbr.database === this.bucket)) {
+    if (!dbrs.content.find((dbr) => dbr.database === this.v1DatabaseName)) {
       await dbrsApi.postDBRP({
         body: {
           org: this.org,
-          database: this.bucket,
+          database: this.v1DatabaseName,
           bucketID: bucketId,
           retention_policy: 'default',
           default: true,
