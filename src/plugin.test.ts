@@ -3,7 +3,7 @@ import { EventEmitter } from 'stream'
 import InfluxPluginFactory, { App, InfluxPlugin, Plugin } from './plugin'
 import waitOn from 'wait-on'
 import retry from 'async-await-retry'
-import { influxPath } from './influx'
+import { influxPath, bucketToV1DatabaseName } from './influx'
 import { Context, Path, PathValue } from '@signalk/server-api'
 import { getValues, InfluxHistoryProvider } from './HistoryAPI'
 import { ZoneId, ZonedDateTime } from '@js-joda/core'
@@ -1217,6 +1217,85 @@ describe('Plugin', () => {
       // Context in response should be the actual self context, not 'vessels.self'
       expect(result.context).to.equal(TESTCONTEXT)
       expect(result.data.length).to.be.greaterThan(0)
+    })
+  })
+
+  describe('Bucket name with forward slash', () => {
+    let slashBucket: string
+    let slashPlugin: Plugin & InfluxPlugin
+
+    beforeEach(async () => {
+      slashBucket = `test/bucket/${Date.now()}`
+      slashPlugin = InfluxPluginFactory(app)
+      await slashPlugin.start({
+        influxes: [
+          {
+            url: `http://${INFLUX_HOST}:8086`,
+            token: 'signalk_token',
+            org: 'signalk_org',
+            bucket: slashBucket,
+            onlySelf: false,
+            writeOptions: {
+              batchSize: 1,
+              flushInterval: 10,
+              maxRetries: 1,
+            },
+            filteringRules: [],
+            ignoredPaths: [],
+            ignoredSources: [],
+            useSKTimestamp: false,
+            resolution: 0,
+          },
+        ],
+        outputDailyLog: false,
+      })
+    })
+
+    afterEach(() => {
+      slashPlugin.stop()
+    })
+
+    it('writes and reads data with forward slash in bucket name', async () => {
+      app.signalk.emit('delta', {
+        context: TESTCONTEXT,
+        updates: [
+          {
+            $source: TESTSOURCE,
+            timestamp: new Date('2022-08-17T17:01:00Z'),
+            values: [
+              {
+                path: TESTPATHNUMERIC,
+                value: TESTNUMERICVALUE,
+              },
+            ],
+          },
+        ],
+      })
+
+      return retry(
+        () =>
+          slashPlugin.flush().then(() =>
+            slashPlugin
+              .getSelfValues({
+                paths: [TESTPATHNUMERIC],
+                influxIndex: 0,
+              })
+              .then((rows) => {
+                expect(rows.length).to.equal(1)
+              }),
+          ),
+        [null],
+        {
+          retriesMax: 5,
+          interval: 50,
+        },
+      )
+    })
+
+    it('uses sanitized v1 database name', () => {
+      const influx = slashPlugin.skInfluxes()[0]
+      expect(influx.v1DatabaseName).to.equal(bucketToV1DatabaseName(slashBucket))
+      expect(influx.v1DatabaseName).to.not.include('/')
     })
   })
 })
