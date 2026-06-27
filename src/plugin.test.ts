@@ -535,6 +535,81 @@ describe('Plugin', () => {
         },
       )
     })
+
+    it('Filters numeric values by sourceRef given after a pipe', async () => {
+      const base = new Date('2023-02-01T00:00:00.000Z')
+      const stepMs = 10_000
+      const count = 5
+      const SOURCE_A = 'source.a'
+      const SOURCE_B = 'source.b'
+
+      for (let i = 0; i < count; i++) {
+        const ts = new Date(base.getTime() + i * stepMs)
+        ;[
+          { source: SOURCE_A, value: 100 + i },
+          { source: SOURCE_B, value: 200 + i },
+        ].forEach(({ source, value }) =>
+          app.signalk.emit('delta', {
+            context: TESTCONTEXT,
+            updates: [
+              {
+                $source: source,
+                timestamp: ts,
+                values: [{ path: 'navigation.speedThroughWater' as Path, value }],
+              },
+            ],
+          }),
+        )
+      }
+
+      await plugin.flush()
+
+      const from = ZonedDateTime.parse('2023-02-01T00:00:00Z')
+      const to = ZonedDateTime.parse('2023-02-01T00:05:00Z')
+
+      return retry(
+        () =>
+          new Promise<ValuesResponse>((resolve) => {
+            getValues(
+              plugin.skInfluxes()[0],
+              TESTCONTEXT as Context,
+              from,
+              to,
+              '',
+              () => undefined,
+              {
+                query: {
+                  paths: `navigation.speedThroughWater:max|${SOURCE_A}`,
+                  resolution: '10',
+                },
+              },
+              {
+                send: () => {
+                  throw new Error('send called')
+                },
+                header: () => {
+                  throw new Error('header called')
+                },
+                status: () => undefined,
+                json: (r) => resolve(r),
+              },
+            )
+          }).then((result) => {
+            expect(result.values).to.deep.equal([
+              { path: 'navigation.speedThroughWater', method: 'max', sourceRef: SOURCE_A },
+            ])
+            expect(result.data.length).to.equal(count)
+            result.data.forEach((row, i) => {
+              expect(row[1]).to.equal(100 + i)
+            })
+          }),
+        [null],
+        {
+          retriesMax: 5,
+          interval: 50,
+        },
+      )
+    })
   })
 
   const assertNumericAfterFirstOtherValue = (firstValue: string | null) => {
