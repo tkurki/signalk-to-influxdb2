@@ -2,7 +2,7 @@ import { DateTimeFormatter, LocalDate, ZoneId, ZonedDateTime } from '@js-joda/co
 
 import { SKInflux } from './influx'
 import { InfluxDB as InfluxV1 } from 'influx'
-import { Context, Path, Timestamp } from '@signalk/server-api'
+import { Context, Path, SourceRef, Timestamp } from '@signalk/server-api'
 import {
   AggregateMethod,
   DataRow,
@@ -55,7 +55,7 @@ export class InfluxHistoryProvider implements HistoryApi {
     const pathSpecs: PathSpec[] = query.pathSpecs.map((spec) => {
       // sourceRef is part of the History API spec but may be absent from the
       // installed @signalk/server-api typings, hence the cast.
-      const sourceRef = (spec as { sourceRef?: string }).sourceRef
+      const sourceRef = (spec as { sourceRef?: SourceRef }).sourceRef
       return {
         path: spec.path,
         queryResultName: spec.path.replace(/\./g, '_'),
@@ -384,7 +384,7 @@ export function getPositions(
   timeResolutionMillis: number,
   needsCollation: boolean,
   debug: (s: string) => void,
-  sourceRef?: string,
+  sourceRef?: SourceRef,
 ): Promise<DataResult> {
   const sourceClause = sourceRef ? `\n    and\n    "source" = '${sourceRef}'` : ''
 
@@ -765,17 +765,17 @@ interface PathSpec {
   aggregateMethod: AggregateMethod
   aggregateFunction: string
   parameters: string[]
-  sourceRef?: string
+  sourceRef?: SourceRef
 }
 
 // A `|sourceRef` suffix on a path expression filters that path to a single
 // source, e.g. 'navigation.speedOverGround:max|n2k-on-ve.can0.115'.
 function splitPathExpression(pathExpression: string): PathSpec {
   const pipeIdx = pathExpression.indexOf('|')
-  let sourceRef: string | undefined
+  let sourceRef: SourceRef | undefined
   let expr = pathExpression
   if (pipeIdx >= 0) {
-    sourceRef = pathExpression.substring(pipeIdx + 1)
+    sourceRef = pathExpression.substring(pipeIdx + 1) as SourceRef
     expr = pathExpression.substring(0, pipeIdx)
   }
 
@@ -828,7 +828,7 @@ function outputPositionsGpx(data: DataResult, context: string, res: SimpleRespon
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toDataResult(rows: any[], sourceRef?: string): DataResult {
+function toDataResult(rows: any[], sourceRef?: SourceRef): DataResult {
   const resultData = rows.map<DataRow>((row) => {
     return [row.time.toISOString(), [row.lon, row.lat]]
   })
