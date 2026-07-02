@@ -6,6 +6,9 @@
   "keywords": [
     "signalk-node-server-plugin"
   ],
+  "signalk": {
+    "appIcon": "./plugin-icon.svg"
+  },
   "author": "Teppo Kurki <teppo.kurki@iki.fi>",
   "repository": "https://github.com/tkurki/signalk-to-influxdb2",
   "scripts": {
