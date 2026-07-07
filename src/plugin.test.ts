@@ -601,7 +601,7 @@ describe('Plugin', () => {
             )
           }).then((result) => {
             expect(result.values).to.deep.equal([
-              { path: 'navigation.speedThroughWater', method: 'max', sourceRef: SOURCE_A },
+              { path: 'navigation.speedThroughWater', method: 'max', $source: SOURCE_A },
             ])
             expect(result.data.length).to.equal(count)
             result.data.forEach((row, i) => {
@@ -664,8 +664,8 @@ describe('Plugin', () => {
         () =>
           historyProvider.getValues(query).then((result) => {
             expect(result.values).to.deep.equal([
-              { path: 'navigation.speedThroughWater', method: 'max', sourceRef: SOURCE_A },
-              { path: 'navigation.speedThroughWater', method: 'max', sourceRef: SOURCE_B },
+              { path: 'navigation.speedThroughWater', method: 'max', $source: SOURCE_A },
+              { path: 'navigation.speedThroughWater', method: 'max', $source: SOURCE_B },
             ])
             expect(result.data.length).to.equal(count)
             result.data.forEach((row, i) => {
@@ -745,10 +745,10 @@ describe('Plugin', () => {
         () =>
           historyProvider.getValues(query).then((result) => {
             expect(result.values).to.deep.equal([
-              { path: 'navigation.headingMagnetic', method: 'max', sourceRef: SOURCE_A },
-              { path: 'navigation.headingMagnetic', method: 'max', sourceRef: SOURCE_B },
-              { path: 'navigation.speedThroughWater', method: 'max', sourceRef: SOURCE_A },
-              { path: 'navigation.speedThroughWater', method: 'max', sourceRef: SOURCE_B },
+              { path: 'navigation.headingMagnetic', method: 'max', $source: SOURCE_A },
+              { path: 'navigation.headingMagnetic', method: 'max', $source: SOURCE_B },
+              { path: 'navigation.speedThroughWater', method: 'max', $source: SOURCE_A },
+              { path: 'navigation.speedThroughWater', method: 'max', $source: SOURCE_B },
             ])
             expect(result.data.length).to.equal(count)
             result.data.forEach((row, i) => {
@@ -820,8 +820,8 @@ describe('Plugin', () => {
         () =>
           historyProvider.getValues(query).then((result) => {
             expect(result.values).to.deep.equal([
-              { path: 'navigation.position', method: 'first', sourceRef: SOURCE_A },
-              { path: 'navigation.position', method: 'first', sourceRef: SOURCE_B },
+              { path: 'navigation.position', method: 'first', $source: SOURCE_A },
+              { path: 'navigation.position', method: 'first', $source: SOURCE_B },
             ])
             expect(result.data.length).to.equal(count)
             result.data.forEach((row, i) => {
