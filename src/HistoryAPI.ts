@@ -709,12 +709,12 @@ export function getValues(
 }
 
 // Builds the `values` descriptor list for a set of path specs, including the
-// sourceRef only when one was requested for that path.
+// $source only when one was requested for that path.
 function valuesForSpecs(pathSpecs: PathSpec[]): ValueList {
   return pathSpecs.map(({ path, aggregateMethod, sourceRef }: PathSpec) => ({
     path,
     method: aggregateMethod,
-    ...(sourceRef ? { sourceRef } : {}),
+    ...(sourceRef ? { $source: sourceRef } : {}),
   }))
 }
 
@@ -1068,7 +1068,7 @@ function toDataResult(rows: any[], sourceRef?: SourceRef): DataResult {
       {
         path: 'navigation.position' as Path,
         method: 'first' as AggregateMethod,
-        ...(sourceRef ? { sourceRef } : {}),
+        ...(sourceRef ? { $source: sourceRef } : {}),
       },
     ],
     data: resultData,
