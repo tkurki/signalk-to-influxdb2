@@ -202,6 +202,7 @@ export class SKInflux {
       protocol: <'http' | 'https'>parsedUrl.protocol.slice(0, -1),
       database: this.v1DatabaseName,
       options: {
+        timeout: 90000,
         headers: {
           Authorization: `Token ${config.token}`,
         },
