@@ -419,6 +419,9 @@ export class SKInflux {
       try {
         switch (valueType) {
           case JsValueType.number:
+            if (typeof value !== 'number' || Number.isNaN(value)) {
+              return []
+            }
             point.floatField('value', value)
             break
           case JsValueType.string:
