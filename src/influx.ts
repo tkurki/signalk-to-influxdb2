@@ -264,6 +264,21 @@ export class SKInflux {
     pathValue: PathValue,
     now: number,
   ) {
+    // Signalk sets several top-level vessel properties at once with an
+    // empty/undefined path and an object value — e.g. AIS static data arrives as
+    // { path: '', value: { name, mmsi } }. Expand it so each key becomes its own
+    // path (and Influx measurement), instead of dumping the whole object as a
+    // JSON blob under the "<empty>" measurement (and crashing typeFor() on an
+    // undefined path via pathValue.path.startsWith()).
+    if (pathValue.path == null || (pathValue.path as string) === '') {
+      const objectValue = pathValue.value
+      if (objectValue != null && typeof objectValue === 'object' && !Array.isArray(objectValue)) {
+        Object.entries(objectValue).forEach(([key, value]) =>
+          this.handleValue(context, isSelf, sourceRef, timestamp, { path: key as Path, value } as PathValue, now),
+        )
+      }
+      return
+    }
     if (this.isIgnored(pathValue.path, sourceRef)) {
       return
     }

@@ -112,3 +112,73 @@ describe('ignoreStatusByRule', () => {
     expect(influx.ignoreStatusByRule('steering.rudderAngle', 'C')).to.equal(true)
   })
 })
+
+describe('handleValue with an empty/undefined-path object value', () => {
+  const noopLogging = {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+    debug: (...args: any) => {
+      return
+    },
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+    error: (...args: any) => {
+      return
+    },
+  }
+
+  const config: SKInfluxConfig = {
+    url: 'http://127.0.0.1:8086',
+    token: 'test_token',
+    org: 'test_org',
+    bucket: 'test_bucket',
+    onlySelf: false,
+    filteringRules: [],
+    ignoredPaths: [],
+    ignoredSources: [],
+    useSKTimestamp: false,
+    resolution: 0,
+    writeOptions: {},
+  }
+
+  it('should not throw on an empty-path object value (e.g. AIS static data)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    const influx = new SKInflux(config, noopLogging, () => {})
+    expect(() =>
+      influx.handleValue(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        'vessels.urn:mrn:imo:mmsi:338316896' as any,
+        false,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        'ydg-nmea-2000' as any,
+        undefined,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { path: '', value: { name: 'INSANITY' } } as any,
+        Date.now(),
+      ),
+    ).to.not.throw()
+  })
+
+  it('should expand an empty-path object value into one point per key, not "<empty>"', () => {
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    const influx = new SKInflux(config, noopLogging, () => {})
+    const processedPaths: (string | undefined)[] = []
+    // Capture which paths actually reach toPoints (i.e. get stored). The fix
+    // should expand { path: '', value: { name, mmsi } } into name + mmsi.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(influx as any).toPoints = (_c: any, _s: any, _src: any, _t: any, pv: any) => {
+      processedPaths.push(pv.path)
+      return []
+    }
+    influx.handleValue(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      'vessels.urn:mrn:imo:mmsi:368327340' as any,
+      true,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      'defaults' as any,
+      undefined,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { path: '', value: { name: 'Tideye', mmsi: '368327340' } } as any,
+      Date.now(),
+    )
+    expect(processedPaths).to.have.members(['name', 'mmsi'])
+  })
+})
