@@ -1,0 +1,17 @@
+{
+  "configuration": {
+    "influxes": [
+      {
+        "url": "http://influx2:8086",
+        "token": "signalk_token",
+        "org": "signalk_org",
+        "bucket": "signalk_bucket",
+        "writeOptions": {
+          "defaultTags": {},
+          "headers": {}
+        }
+      }
+    ]
+  },
+  "enabled": true
+}

@@ -41,3 +41,5 @@ dist
 *.tgz
 
 .vscode/
+
+end2end-setup/influx-config/influx-configs
