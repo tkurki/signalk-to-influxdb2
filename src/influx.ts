@@ -413,10 +413,10 @@ export class SKInflux {
         return acc
       }, [])
     } else {
-      const valueType = typeFor(pathValue)
       if (value === null) {
         return []
       }
+      const valueType = typeFor(pathValue)
       try {
         switch (valueType) {
           case JsValueType.number:
