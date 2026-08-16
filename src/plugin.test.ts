@@ -34,6 +34,9 @@ describe('Plugin', () => {
     },
     signalk: new EventEmitter(),
     selfId,
+    config: {
+      version: '2.28.0',
+    },
     setPluginStatus: (s: string) => console.log(s),
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore

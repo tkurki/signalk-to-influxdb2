@@ -12,6 +12,14 @@ export const PluginConfigSchema = {
       default: false,
       type: 'boolean',
     },
+    sourcePolicy: {
+      title: 'Source policy',
+      description:
+        'Which sources to record. "preferred" (default) records only the source chosen by Signal K Source Priority for each path. "all" records data for every source',
+      default: 'preferred',
+      enum: ['preferred', 'all'],
+      type: 'string',
+    },
     influxes: {
       type: 'array',
       items: {
