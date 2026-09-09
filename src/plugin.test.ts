@@ -21,6 +21,8 @@ const TESTCONTEXT = `vessels.${selfId}`
 const MMSICONTEXT = 'vessels.urn:mrn:imo:mmsi:200000000'
 
 describe('Plugin', () => {
+  let unregisterHistoryApiProviderCallCount = 0
+
   const app: App = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
     debug: function (...args: any): void {
@@ -46,7 +48,7 @@ describe('Plugin', () => {
       // Mock implementation for tests
     },
     unregisterHistoryApiProvider: () => {
-      // Mock implementation for tests
+      unregisterHistoryApiProviderCallCount++
     },
   }
 
@@ -1371,6 +1373,12 @@ describe('Plugin', () => {
       const before = app.signalk.listenerCount('delta')
       await plugin.stop()
       expect(app.signalk.listenerCount('delta')).to.equal(before - 1)
+    })
+
+    it('unregisters the history API provider', async () => {
+      const before = unregisterHistoryApiProviderCallCount
+      await plugin.stop()
+      expect(unregisterHistoryApiProviderCallCount).to.equal(before + 1)
     })
   })
 
