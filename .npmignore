@@ -10,3 +10,4 @@ data/*
 .dockerignore
 *rc.*
 generate-schema
+end2end-setup
