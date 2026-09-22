@@ -4,7 +4,7 @@ import { Context, Path } from '@signalk/server-api'
 import { InfluxHistoryProvider } from './HistoryAPI'
 import { SKInflux } from './influx'
 
-describe('InfluxDB History API', () => {
+describe('InfluxDB History API series alignment', () => {
   it('aligns sparse measurements by timestamp, not by row index', async () => {
     const times = [0, 1, 2].map((minute) => new Date(Date.UTC(2026, 8, 5, 15, 44 + minute)))
     const influx = {
