@@ -849,6 +849,7 @@ const functionForAggregate: { [key: string]: string } = {
   min: 'min',
   max: 'max',
   first: 'first',
+  last: 'last',
   sma: 'mean', // Use mean from DB, then apply SMA post-processing
   ema: 'mean', // Use mean from DB, then apply EMA post-processing
 }
