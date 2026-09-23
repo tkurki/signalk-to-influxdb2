@@ -9,7 +9,7 @@ describe('InfluxDB History API', () => {
     let query = ''
     const time = new Date('2026-09-05T15:44:00Z')
     const rows = Object.assign([{ time }], {
-      groups: () => [{ name: 'navigation.state', rows: [{ last: 'motoring' }] }],
+      groups: () => [{ name: 'navigation.state', rows: [{ time, last: 'motoring' }] }],
     })
     const influx = {
       v1Client: {

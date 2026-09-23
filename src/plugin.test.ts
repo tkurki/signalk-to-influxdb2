@@ -7,7 +7,7 @@ import { influxPath, bucketToV1DatabaseName } from './influx'
 import { Context, Path, PathValue } from '@signalk/server-api'
 import { getValues, InfluxHistoryProvider } from './HistoryAPI'
 import { ZoneId, ZonedDateTime } from '@js-joda/core'
-import { ValuesResponse } from '@signalk/server-api/history'
+import { ValuesRequest, ValuesResponse } from '@signalk/server-api/history'
 import { Temporal } from '@js-temporal/polyfill'
 
 const INFLUX_HOST = process.env['INFLUX_HOST'] || '127.0.0.1'
@@ -856,7 +856,7 @@ describe('Plugin', () => {
       }
 
       try {
-        await historyProvider.getValues(query)
+        await historyProvider.getValues(query as unknown as ValuesRequest)
         throw new Error('Expected sourcePolicy=preferred to fail')
       } catch (error) {
         expect((error as Error).message).to.contain("sourcePolicy='preferred' is not implemented")
