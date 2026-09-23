@@ -18,6 +18,7 @@ import {
 
 export type DataResult = Omit<ValuesResponse, 'context' | 'range'>
 type SourcePolicy = 'preferred' | 'all'
+type HistoryValuesRequest = Omit<ValuesRequest, 'sourcePolicy'> & { sourcePolicy?: SourcePolicy }
 
 const DEFAULT_EMA_PERIOD = 5
 
@@ -46,7 +47,7 @@ function makeArray(d1: number, d2: number) {
 export class InfluxHistoryProvider implements HistoryApi {
   constructor(private influx: SKInflux, private selfId: string, private debug: (k: string) => void) {}
 
-  async getValues(query: ValuesRequest): Promise<ValuesResponse> {
+  async getValues(query: HistoryValuesRequest): Promise<ValuesResponse> {
     const { from, to } = getTimeRange(query)
     const context = ((query.context === 'vessels.self' ? `vessels.${this.selfId}` : query.context) ||
       `vessels.${this.selfId}`) as Context
@@ -67,7 +68,7 @@ export class InfluxHistoryProvider implements HistoryApi {
       }
     })
 
-    const sourcePolicy = (query as ValuesRequest & { sourcePolicy?: SourcePolicy }).sourcePolicy
+    const sourcePolicy = query.sourcePolicy
     if (sourcePolicy === 'preferred') {
       throw new Error(
         "sourcePolicy='preferred' is not implemented by signalk-to-influxdb2; omit sourcePolicy for provider default behavior or use sourcePolicy='all'",
@@ -252,7 +253,7 @@ export class InfluxHistoryProvider implements HistoryApi {
   }
 }
 
-function getTimeRange(query: ValuesRequest | PathsRequest | ContextsRequest): {
+function getTimeRange(query: HistoryValuesRequest | PathsRequest | ContextsRequest): {
   from: ZonedDateTime
   to: ZonedDateTime
 } {
