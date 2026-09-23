@@ -1,6 +1,7 @@
 import { expect } from 'chai'
 import { Temporal } from '@js-temporal/polyfill'
 import { Context, Path } from '@signalk/server-api'
+import { ValuesRequest } from '@signalk/server-api/history'
 import { InfluxHistoryProvider } from './HistoryAPI'
 import { SKInflux } from './influx'
 
@@ -140,5 +141,49 @@ describe('InfluxDB History API series alignment', () => {
 
     expect(queries).to.have.length(2)
     expect(result.data).to.deep.equal([[time.toISOString(), 2, 5]])
+  })
+
+  it('keeps sourced positions and mixed aggregates aligned with sourcePolicy all', async () => {
+    const times = [0, 1].map((minute) => new Date(Date.UTC(2026, 8, 5, 15, 44 + minute)))
+    const queries: string[] = []
+    const influx = {
+      v1Client: {
+        query: async (sql: string) => {
+          queries.push(sql)
+          if (sql.includes('"navigation.position"')) {
+            return [{ time: times[0], lat: 60, lon: 24 }]
+          }
+          if (sql.includes('"navigation.speedOverGround"')) {
+            return Object.assign([{ time: times[0] }], {
+              groups: () => [{ name: 'navigation.speedOverGround', rows: [{ time: times[0], max: 3 }] }],
+            })
+          }
+          return Object.assign([{ time: times[1] }], {
+            groups: () => [{ name: 'navigation.state', rows: [{ time: times[1], last: 'motoring' }] }],
+          })
+        },
+      },
+    } as unknown as SKInflux
+    const provider = new InfluxHistoryProvider(influx, 'test-vessel', () => undefined)
+
+    const result = await provider.getValues({
+      context: 'vessels.test-vessel' as Context,
+      from: Temporal.Instant.from('2026-09-05T15:44:00Z'),
+      to: Temporal.Instant.from('2026-09-05T15:46:00Z'),
+      resolution: 60,
+      sourcePolicy: 'all',
+      pathSpecs: [
+        { path: 'navigation.position' as Path, aggregate: 'first', parameter: [], sourceRef: 'test.source' },
+        { path: 'navigation.speedOverGround' as Path, aggregate: 'max', parameter: [], sourceRef: 'test.source' },
+        { path: 'navigation.state' as Path, aggregate: 'last', parameter: [], sourceRef: 'test.source' },
+      ],
+    } as unknown as ValuesRequest)
+
+    expect(queries).to.have.length(3)
+    queries.forEach((sql) => expect(sql).to.include('"source" = \'test.source\''))
+    expect(result.data).to.deep.equal([
+      [times[0].toISOString(), [24, 60], 3, null],
+      [times[1].toISOString(), null, null, 'motoring'],
+    ])
   })
 })

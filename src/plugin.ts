@@ -107,7 +107,7 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
       const historyProvider = new InfluxHistoryProvider(skInfluxes[0], app.selfId, app.debug)
       app.registerHistoryApiProvider(historyProvider)
 
-      onStop = []
+      onStop = [() => app.unregisterHistoryApiProvider()]
       skInfluxes.forEach((skInflux) => {
         const pruner = setInterval(() => skInflux.pruneLastWrittenTimestamps(), 5 * 60 * 1000)
         onStop.push(() => clearInterval(pruner))
