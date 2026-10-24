@@ -1,6 +1,6 @@
 import { DateTimeFormatter, LocalDate, ZoneId, ZonedDateTime } from '@js-joda/core'
 
-import { SKInflux } from './influx'
+import { HistoryQuerySource } from './influx'
 import { InfluxDB as InfluxV1 } from 'influx'
 import { Context, Path, SourceRef, Timestamp } from '@signalk/server-api'
 import {
@@ -36,7 +36,7 @@ function resolveEmaParams(spec: PathSpec): { period: number; alpha: number } {
 }
 
 export class InfluxHistoryProvider implements HistoryApi {
-  constructor(private influx: SKInflux, private selfId: string, private debug: (k: string) => void) {}
+  constructor(private influx: HistoryQuerySource, private selfId: string, private debug: (k: string) => void) {}
 
   async getValues(query: ValuesRequest): Promise<ValuesResponse> {
     const { from, to } = getTimeRange(query)
@@ -384,7 +384,7 @@ export function getPositions(
 }
 
 async function expandPathSpecsBySource(
-  influx: SKInflux,
+  influx: HistoryQuerySource,
   context: Context,
   from: ZonedDateTime,
   to: ZonedDateTime,
@@ -407,7 +407,7 @@ async function expandPathSpecsBySource(
 }
 
 function getSourceRefsForPath(
-  influx: SKInflux,
+  influx: HistoryQuerySource,
   context: Context,
   from: ZonedDateTime,
   to: ZonedDateTime,
@@ -474,7 +474,7 @@ function sourceRefsFromInfluxResult(result: InfluxSourceResult): SourceRef[] {
 }
 
 export function getValues(
-  influx: SKInflux,
+  influx: HistoryQuerySource,
   context: Context,
   from: ZonedDateTime,
   to: ZonedDateTime,
@@ -728,7 +728,7 @@ function hasMeaningfulValue(value: any): boolean {
 }
 
 function getNumericValues(
-  influx: SKInflux,
+  influx: HistoryQuerySource,
   context: Context,
   from: ZonedDateTime,
   to: ZonedDateTime,
@@ -817,7 +817,7 @@ function getNumericValues(
 // Runs a single InfluxQL query for path specs that share one source and aggregate,
 // returning rows in the same column order as `pathSpecs`.
 function querySourceGroup(
-  influx: SKInflux,
+  influx: HistoryQuerySource,
   context: Context,
   from: ZonedDateTime,
   to: ZonedDateTime,
@@ -969,7 +969,7 @@ const functionForAggregate: { [key: string]: string } = {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function getDailyLogData(influx: SKInflux, selfId: string, debug: (...args: any) => void) {
+export function getDailyLogData(influx: HistoryQuerySource, selfId: string, debug: (...args: any) => void) {
   return new Promise<{ length: number }>((resolve) => {
     const startOfToday = LocalDate.now().atStartOfDay().atZone(ZoneId.of('UTC'))
     getValues(

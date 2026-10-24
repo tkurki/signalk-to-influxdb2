@@ -122,6 +122,42 @@ export const influxPath = (path: string) => (path !== '' ? path : '<empty>')
  */
 export const bucketToV1DatabaseName = (bucket: string) => bucket.replace(/[/\\]/g, '_')
 
+export interface HistoryQuerySource {
+  bucket: string
+  queryApi: QueryApi
+  v1Client: InfluxV1
+}
+
+export function createInfluxV1Client(config: Pick<SKInfluxConfig, 'url' | 'org' | 'token' | 'bucket'>): InfluxV1 {
+  const parsedUrl = new URL(config.url)
+  return new InfluxV1({
+    host: parsedUrl.hostname,
+    username: config.org,
+    // leave password empty
+    password: '',
+    port: Number(parsedUrl.port),
+    protocol: <'http' | 'https'>parsedUrl.protocol.slice(0, -1),
+    database: bucketToV1DatabaseName(config.bucket),
+    options: {
+      timeout: 90000,
+      headers: {
+        Authorization: `Token ${config.token}`,
+      },
+    },
+  })
+}
+
+export function createInfluxQuerySource(
+  config: Pick<SKInfluxConfig, 'url' | 'org' | 'token' | 'bucket'>,
+  influx: InfluxDB = new InfluxDB({ url: config.url, token: config.token }),
+): HistoryQuerySource {
+  return {
+    bucket: config.bucket,
+    queryApi: influx.getQueryApi(config.org),
+    v1Client: createInfluxV1Client(config),
+  }
+}
+
 enum JsValueType {
   number = 'number',
   string = 'string',
@@ -191,23 +227,9 @@ export class SKInflux {
         triggerStatusUpdate()
       },
     })
-    this.queryApi = this.influx.getQueryApi(org)
-    const parsedUrl = new URL(url)
-    this.v1Client = new InfluxV1({
-      host: parsedUrl.hostname,
-      username: org,
-      // leave password empty
-      password: '',
-      port: Number(parsedUrl.port),
-      protocol: <'http' | 'https'>parsedUrl.protocol.slice(0, -1),
-      database: this.v1DatabaseName,
-      options: {
-        timeout: 90000,
-        headers: {
-          Authorization: `Token ${config.token}`,
-        },
-      },
-    })
+    const querySource = createInfluxQuerySource(config, this.influx)
+    this.queryApi = querySource.queryApi
+    this.v1Client = querySource.v1Client
   }
 
   init() {

@@ -16,6 +16,7 @@
 import { SKInflux, SKInfluxConfig } from './influx'
 import { EventEmitter } from 'stream'
 import { getDailyLogData, InfluxHistoryProvider } from './HistoryAPI'
+import { WorkerHistoryProvider } from './historyWorkerClient'
 import { IRouter } from 'express'
 import { Context, Delta, hasValues, MetaDelta, Path, PathValue, SourceRef, ValuesDelta } from '@signalk/server-api'
 import { HistoryApiRegistry } from '@signalk/server-api/history'
@@ -89,10 +90,11 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
   const selfContext = 'vessels.' + app.selfId
 
   let skInfluxes: SKInflux[] = []
-  let onStop: (() => void)[] = []
+  let historyWorker: WorkerHistoryProvider | undefined
+  let onStop: (() => void | Promise<unknown>)[] = []
   const flush = () => Promise.all(skInfluxes.map((ski) => ski.flush()))
   return {
-    start: function (config: PluginConfig) {
+    start: async function (config: PluginConfig) {
       const updatePluginStatus = () => {
         app.setPluginStatus(
           skInfluxes
@@ -104,7 +106,23 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
         )
       }
       skInfluxes = config.influxes.map((config: SKInfluxConfig) => new SKInflux(config, app, updatePluginStatus))
-      const historyProvider = new InfluxHistoryProvider(skInfluxes[0], app.selfId, app.debug)
+
+      const primaryInflux = config.influxes[0]
+      historyWorker = new WorkerHistoryProvider(
+        {
+          url: primaryInflux.url,
+          token: primaryInflux.token,
+          org: primaryInflux.org,
+          bucket: primaryInflux.bucket,
+        },
+        app.selfId,
+        app.debug,
+      )
+      const workerStarted = await historyWorker.start()
+      if (!workerStarted) {
+        historyWorker = undefined
+      }
+      const historyProvider = historyWorker ?? new InfluxHistoryProvider(skInfluxes[0], app.selfId, app.debug)
       app.registerHistoryApiProvider(historyProvider)
 
       onStop = [() => app.unregisterHistoryApiProvider()]
@@ -131,24 +149,31 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
         let previousLength = 0
         const get = () => {
           app.debug('getDailyLogData')
-          getDailyLogData(skInfluxes[0], app.selfId, app.debug).then(({ length }) => {
-            app.debug(length)
-            if (length !== previousLength) {
-              previousLength = length
-              app.handleMessage('', {
-                updates: [
-                  {
-                    values: [
-                      {
-                        path: 'navigation.trip.daily.log' as Path,
-                        value: length,
-                      },
-                    ],
-                  },
-                ],
-              })
-            }
-          })
+          const dailyLog = historyWorker
+            ? historyWorker.getDailyLog()
+            : getDailyLogData(skInfluxes[0], app.selfId, app.debug)
+          dailyLog
+            .then(({ length }) => {
+              app.debug(length)
+              if (length !== previousLength) {
+                previousLength = length
+                app.handleMessage('', {
+                  updates: [
+                    {
+                      values: [
+                        {
+                          path: 'navigation.trip.daily.log' as Path,
+                          value: length,
+                        },
+                      ],
+                    },
+                  ],
+                })
+              }
+            })
+            .catch((error: Error) => {
+              app.debug(`Daily log query failed: ${error.message}`)
+            })
         }
         const interval = setInterval(get, 5 * 60 * 1000)
         get()
@@ -191,13 +216,21 @@ export default function InfluxPluginFactory(app: App): Plugin & InfluxPlugin {
           }
         }
         app.signalk.on(deltaEvent, onDelta)
-        onStop.push(() => app.signalk.removeListener(deltaEvent, onDelta))
+        onStop.push(() => {
+          app.signalk.removeListener(deltaEvent, onDelta)
+        })
       })
     },
 
-    stop: () => {
-      onStop.forEach((f) => f())
+    stop: async () => {
+      const handlers = onStop
       onStop = []
+      await Promise.allSettled(handlers.map((f) => f()))
+      const worker = historyWorker
+      historyWorker = undefined
+      if (worker) {
+        await worker.close().catch(() => undefined)
+      }
       // Without this, any points still sitting in the write client's
       // buffer (it batches by default, see getWriteApi) are lost if the
       // process exits before the write client's own flush timer fires --
